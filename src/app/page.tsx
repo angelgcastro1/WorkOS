@@ -31,7 +31,7 @@ export default async function DashboardPage() {
         <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-2xl text-white shadow-lg shadow-indigo-500/30">
           <Sparkles className="h-7 w-7" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Welcome to WorkOS, {profile?.name ?? "there"}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Welcome to WorkCHAM, {profile?.name ?? "there"}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Your workspace is empty. Load a realistic starter set to see everything in action — you can edit or clear it anytime.
         </p>
