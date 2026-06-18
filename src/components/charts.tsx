@@ -73,10 +73,10 @@ export function CategoryBars({ data }: { data: CategoryDatum[] }) {
   );
 }
 
-type IncomeDatum = { month: string; income: number; goal: number };
+type IncomeDatum = { month: string; income: number; goal?: number };
 
 export function IncomeBars({ data }: { data: IncomeDatum[] }) {
-  const goal = data.length > 0 ? data[0].goal : 0;
+  const goal = data.length > 0 ? data[0].goal ?? 0 : 0;
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">

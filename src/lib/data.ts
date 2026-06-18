@@ -5,6 +5,8 @@ export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type ProjectStatus = "planning" | "active" | "on_hold" | "done";
 export type NoteType = "Idea" | "Meeting" | "Client" | "SOP" | "Prompt" | "Note";
+export type ApplicationStage = "applied" | "screening" | "interview" | "offer" | "rejected";
+export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
 
 export interface Profile {
   id: string;
@@ -81,10 +83,44 @@ export interface Reminder {
   done: boolean;
 }
 
+export interface Application {
+  id: string;
+  company: string;
+  role: string | null;
+  link: string | null;
+  stage: ApplicationStage;
+  appliedOn: string | null;
+  nextStep: string | null;
+  notes: string | null;
+}
+
+export interface Invoice {
+  id: string;
+  client: string;
+  projectId: string | null;
+  amount: number;
+  status: InvoiceStatus;
+  issuedOn: string | null;
+  dueOn: string | null;
+  paidOn: string | null;
+  notes: string | null;
+}
+
+export interface TimeEntry {
+  id: string;
+  projectId: string | null;
+  description: string | null;
+  minutes: number;
+  entryDate: string | null;
+}
+
 export interface Workspace {
   projects: Project[];
   tasks: Task[];
   notes: Note[];
   contacts: Contact[];
   reminders: Reminder[];
+  applications: Application[];
+  invoices: Invoice[];
+  timeEntries: TimeEntry[];
 }

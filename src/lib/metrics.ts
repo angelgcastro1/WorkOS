@@ -1,4 +1,4 @@
-import type { Workspace, Task, Contact, Project } from "@/lib/data";
+import type { Workspace, Task, Contact, Project, Invoice, Application, TimeEntry } from "@/lib/data";
 
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -7,6 +7,9 @@ function today(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export interface Kpis {
@@ -18,6 +21,11 @@ export interface Kpis {
   pipelineValue: number;
   wonValue: number;
   contacts: number;
+  incomeThisMonth: number;
+  outstanding: number;
+  applicationsCount: number;
+  interviews: number;
+  offers: number;
 }
 
 export function deriveKpis(w: Workspace): Kpis {
@@ -26,6 +34,7 @@ export function deriveKpis(w: Workspace): Kpis {
   const weekAgo = new Date(t0);
   weekAgo.setDate(weekAgo.getDate() - 7);
   const weekAgoIso = isoDay(weekAgo);
+  const ym = monthKey(t0);
 
   const total = w.tasks.length;
   const done = w.tasks.filter((t) => t.status === "done").length;
@@ -39,6 +48,13 @@ export function deriveKpis(w: Workspace): Kpis {
     pipelineValue: w.contacts.filter((c) => c.stage !== "won" && c.stage !== "lost").reduce((s, c) => s + c.value, 0),
     wonValue: w.contacts.filter((c) => c.stage === "won").reduce((s, c) => s + c.value, 0),
     contacts: w.contacts.length,
+    incomeThisMonth: w.invoices
+      .filter((i) => i.status === "paid" && (i.paidOn ?? "").slice(0, 7) === ym)
+      .reduce((s, i) => s + i.amount, 0),
+    outstanding: w.invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.amount, 0),
+    applicationsCount: w.applications.length,
+    interviews: w.applications.filter((a) => a.stage === "interview" || a.stage === "offer").length,
+    offers: w.applications.filter((a) => a.stage === "offer").length,
   };
 }
 
@@ -94,4 +110,42 @@ export function pipelineByStage(contacts: Contact[]): { stage: string; value: nu
     stage: s.label,
     value: contacts.filter((c) => c.stage === s.key).length,
   }));
+}
+
+export function incomeByMonth(invoices: Invoice[], months = 6): { month: string; income: number }[] {
+  const base = today();
+  const out: { month: string; income: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    const ym = monthKey(d);
+    const income = invoices
+      .filter((inv) => inv.status === "paid" && (inv.paidOn ?? "").slice(0, 7) === ym)
+      .reduce((s, inv) => s + inv.amount, 0);
+    out.push({ month: d.toLocaleDateString(undefined, { month: "short" }), income });
+  }
+  return out;
+}
+
+const APP_STAGES = [
+  { key: "applied", label: "Applied" },
+  { key: "screening", label: "Screening" },
+  { key: "interview", label: "Interview" },
+  { key: "offer", label: "Offer" },
+];
+
+export function applicationsFunnel(applications: Application[]): { stage: string; value: number }[] {
+  return APP_STAGES.map((s) => ({
+    stage: s.label,
+    value: applications.filter((a) => a.stage === s.key).length,
+  }));
+}
+
+export function timeByProject(timeEntries: TimeEntry[], projects: Project[]): { name: string; minutes: number }[] {
+  const nameById = new Map(projects.map((p) => [p.id, p.name]));
+  const map = new Map<string, number>();
+  for (const te of timeEntries) {
+    const key = te.projectId ? nameById.get(te.projectId) ?? "Other" : "No project";
+    map.set(key, (map.get(key) ?? 0) + te.minutes);
+  }
+  return Array.from(map, ([name, minutes]) => ({ name, minutes }));
 }

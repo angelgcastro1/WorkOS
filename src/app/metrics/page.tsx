@@ -1,8 +1,15 @@
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { WeeklyTrend, CategoryBars, StatusDonut, FunnelBars } from "@/components/charts";
+import { WeeklyTrend, CategoryBars, StatusDonut, FunnelBars, IncomeBars } from "@/components/charts";
 import { getWorkspace } from "@/lib/queries";
-import { deriveKpis, weeklyCompleted, tasksByStatus, projectsByCategory, pipelineByStage } from "@/lib/metrics";
+import {
+  deriveKpis,
+  weeklyCompleted,
+  tasksByStatus,
+  projectsByCategory,
+  applicationsFunnel,
+  incomeByMonth,
+} from "@/lib/metrics";
 import { formatMoney } from "@/lib/utils";
 
 function ChartCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
@@ -19,17 +26,17 @@ function ChartCard({ title, hint, children }: { title: string; hint?: string; ch
 
 export default async function MetricsPage() {
   const workspace = await getWorkspace();
-  const { tasks, projects, contacts } = workspace;
+  const { tasks, projects, applications, invoices } = workspace;
   const kpi = deriveKpis(workspace);
   const statusData = tasksByStatus(tasks);
 
   const stats: { label: string; value: string; sub?: string }[] = [
     { label: "Open tasks", value: String(kpi.openTasks), sub: `${kpi.overdue} overdue` },
     { label: "Done · 7 days", value: String(kpi.doneThisWeek), sub: "this week" },
-    { label: "Completion", value: `${kpi.completionRate}%`, sub: "all tasks" },
+    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), sub: `${formatMoney(kpi.outstanding)} outstanding` },
+    { label: "Applications", value: String(kpi.applicationsCount), sub: `${kpi.interviews} interviews` },
     { label: "Active projects", value: String(kpi.activeProjects), sub: `${projects.length} total` },
-    { label: "Pipeline", value: formatMoney(kpi.pipelineValue), sub: `${formatMoney(kpi.wonValue)} won` },
-    { label: "Contacts", value: String(kpi.contacts), sub: "in CRM" },
+    { label: "Completion", value: `${kpi.completionRate}%`, sub: "all tasks" },
   ];
 
   return (
@@ -56,6 +63,10 @@ export default async function MetricsPage() {
           <WeeklyTrend data={weeklyCompleted(tasks)} />
         </ChartCard>
 
+        <ChartCard title="Income" hint="paid, last 6 months">
+          <IncomeBars data={incomeByMonth(invoices)} />
+        </ChartCard>
+
         <ChartCard title="Tasks by status">
           <div className="flex items-center gap-4">
             <div className="flex-1">
@@ -73,6 +84,14 @@ export default async function MetricsPage() {
           </div>
         </ChartCard>
 
+        <ChartCard title="Job search funnel" hint="applied → offer">
+          {applications.length === 0 ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">No applications yet.</p>
+          ) : (
+            <FunnelBars data={applicationsFunnel(applications)} />
+          )}
+        </ChartCard>
+
         <ChartCard title="Projects by category">
           {projects.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">No projects yet.</p>
@@ -81,12 +100,25 @@ export default async function MetricsPage() {
           )}
         </ChartCard>
 
-        <ChartCard title="CRM pipeline" hint="contacts by stage">
-          {contacts.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">No contacts yet.</p>
-          ) : (
-            <FunnelBars data={pipelineByStage(contacts)} />
-          )}
+        <ChartCard title="This week at a glance">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-3xl font-bold tabular-nums text-emerald-400">{kpi.doneThisWeek}</p>
+              <p className="text-xs text-muted-foreground">tasks completed</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-3xl font-bold tabular-nums text-indigo-400">{kpi.completionRate}%</p>
+              <p className="text-xs text-muted-foreground">completion rate</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-3xl font-bold tabular-nums text-sky-400">{kpi.applicationsCount}</p>
+              <p className="text-xs text-muted-foreground">applications</p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-3xl font-bold tabular-nums text-amber-400">{formatMoney(kpi.outstanding)}</p>
+              <p className="text-xs text-muted-foreground">outstanding</p>
+            </div>
+          </div>
         </ChartCard>
       </div>
     </div>

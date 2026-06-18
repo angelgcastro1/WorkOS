@@ -147,6 +147,93 @@ export async function deleteReminder(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function createApplication(formData: FormData) {
+  const company = str(formData.get("company"));
+  if (!company) return;
+  const supabase = await createClient();
+  await supabase.from("applications").insert({
+    company,
+    role: str(formData.get("role")),
+    link: str(formData.get("link")),
+    stage: str(formData.get("stage")) ?? "applied",
+    next_step: str(formData.get("next_step")),
+    notes: str(formData.get("notes")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function setApplicationStage(formData: FormData) {
+  const id = str(formData.get("id"));
+  const stage = str(formData.get("stage"));
+  if (!id || !stage) return;
+  const supabase = await createClient();
+  await supabase.from("applications").update({ stage }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteApplication(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("applications").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createInvoice(formData: FormData) {
+  const client = str(formData.get("client"));
+  if (!client) return;
+  const supabase = await createClient();
+  await supabase.from("invoices").insert({
+    client,
+    project_id: str(formData.get("project_id")),
+    amount: Number(str(formData.get("amount")) ?? "0") || 0,
+    status: str(formData.get("status")) ?? "sent",
+    due_on: str(formData.get("due_on")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function setInvoiceStatus(formData: FormData) {
+  const id = str(formData.get("id"));
+  const status = str(formData.get("status"));
+  if (!id || !status) return;
+  const supabase = await createClient();
+  await supabase
+    .from("invoices")
+    .update({ status, paid_on: status === "paid" ? new Date().toISOString().slice(0, 10) : null })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteInvoice(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("invoices").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createTimeEntry(formData: FormData) {
+  const minutes = Number(str(formData.get("minutes")) ?? "0") || 0;
+  if (minutes <= 0) return;
+  const supabase = await createClient();
+  await supabase.from("time_entries").insert({
+    project_id: str(formData.get("project_id")),
+    description: str(formData.get("description")),
+    minutes,
+    entry_date: str(formData.get("entry_date")) ?? new Date().toISOString().slice(0, 10),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function deleteTimeEntry(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("time_entries").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function createWhiteboard() {
   const supabase = await createClient();
   const { data } = await supabase.from("whiteboards").insert({ title: "Untitled board" }).select("id").single();

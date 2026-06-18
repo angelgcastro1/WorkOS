@@ -7,11 +7,16 @@ import type {
   Contact,
   Reminder,
   Attachment,
+  Application,
+  Invoice,
+  TimeEntry,
   Profile,
   ProjectStatus,
   Priority,
   TaskStatus,
   NoteType,
+  ApplicationStage,
+  InvoiceStatus,
 } from "@/lib/data";
 
 interface ProjectRow {
@@ -72,6 +77,34 @@ interface AttachmentRow {
   size: number | string | null;
   created_at: string | null;
 }
+interface ApplicationRow {
+  id: string;
+  company: string;
+  role: string | null;
+  link: string | null;
+  stage: string;
+  applied_on: string | null;
+  next_step: string | null;
+  notes: string | null;
+}
+interface InvoiceRow {
+  id: string;
+  client: string;
+  project_id: string | null;
+  amount: number | string | null;
+  status: string;
+  issued_on: string | null;
+  due_on: string | null;
+  paid_on: string | null;
+  notes: string | null;
+}
+interface TimeEntryRow {
+  id: string;
+  project_id: string | null;
+  description: string | null;
+  minutes: number | null;
+  entry_date: string | null;
+}
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -90,13 +123,16 @@ export async function getProfile(): Promise<Profile | null> {
 
 export async function getWorkspace(): Promise<Workspace> {
   const supabase = await createClient();
-  const [pRes, tRes, nRes, cRes, rRes, aRes] = await Promise.all([
+  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: true }),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("notes").select("*").order("date", { ascending: false }),
     supabase.from("contacts").select("*").order("created_at", { ascending: true }),
     supabase.from("reminders").select("*").order("due_at", { ascending: true }),
     supabase.from("note_attachments").select("*").order("created_at", { ascending: true }),
+    supabase.from("applications").select("*").order("applied_on", { ascending: false }),
+    supabase.from("invoices").select("*").order("issued_on", { ascending: false }),
+    supabase.from("time_entries").select("*").order("entry_date", { ascending: false }),
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];
@@ -105,6 +141,9 @@ export async function getWorkspace(): Promise<Workspace> {
   const contactRows = (cRes.data ?? []) as ContactRow[];
   const reminderRows = (rRes.data ?? []) as ReminderRow[];
   const attachmentRows = (aRes.data ?? []) as AttachmentRow[];
+  const applicationRows = (appRes.data ?? []) as ApplicationRow[];
+  const invoiceRows = (invRes.data ?? []) as InvoiceRow[];
+  const timeEntryRows = (teRes.data ?? []) as TimeEntryRow[];
 
   const projectName = new Map<string, string>(projectRows.map((p) => [p.id, p.name]));
 
@@ -188,5 +227,36 @@ export async function getWorkspace(): Promise<Workspace> {
     done: r.done,
   }));
 
-  return { projects, tasks, notes, contacts, reminders };
+  const applications: Application[] = applicationRows.map((a) => ({
+    id: a.id,
+    company: a.company,
+    role: a.role,
+    link: a.link,
+    stage: a.stage as ApplicationStage,
+    appliedOn: a.applied_on,
+    nextStep: a.next_step,
+    notes: a.notes,
+  }));
+
+  const invoices: Invoice[] = invoiceRows.map((i) => ({
+    id: i.id,
+    client: i.client,
+    projectId: i.project_id,
+    amount: Number(i.amount) || 0,
+    status: i.status as InvoiceStatus,
+    issuedOn: i.issued_on,
+    dueOn: i.due_on,
+    paidOn: i.paid_on,
+    notes: i.notes,
+  }));
+
+  const timeEntries: TimeEntry[] = timeEntryRows.map((te) => ({
+    id: te.id,
+    projectId: te.project_id,
+    description: te.description,
+    minutes: te.minutes ?? 0,
+    entryDate: te.entry_date,
+  }));
+
+  return { projects, tasks, notes, contacts, reminders, applications, invoices, timeEntries };
 }

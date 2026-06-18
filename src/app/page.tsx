@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ListTodo, Folder, Flag, DollarSign, Activity, Calendar, FileText, Check, Sparkles, Bell } from "lucide-react";
+import { ListTodo, Folder, Flag, DollarSign, Send, Calendar, FileText, Check, Sparkles, Bell } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -54,8 +54,8 @@ export default async function DashboardPage() {
     { label: "Done · 7 days", value: String(kpi.doneThisWeek), icon: Check, accent: "text-emerald-400 bg-emerald-500/10", foot: "this week" },
     { label: "Active projects", value: String(kpi.activeProjects), icon: Folder, accent: "text-violet-400 bg-violet-500/10", foot: `${projects.length} total` },
     { label: "Overdue", value: String(kpi.overdue), icon: Flag, accent: "text-red-400 bg-red-500/10", foot: kpi.overdue ? "needs attention" : "all clear" },
-    { label: "Completion", value: `${kpi.completionRate}%`, icon: Activity, accent: "text-amber-400 bg-amber-500/10", foot: "of all tasks" },
-    { label: "Pipeline", value: formatMoney(kpi.pipelineValue), icon: DollarSign, accent: "text-sky-400 bg-sky-500/10", foot: `${formatMoney(kpi.wonValue)} won` },
+    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), icon: DollarSign, accent: "text-emerald-400 bg-emerald-500/10", foot: `${formatMoney(kpi.outstanding)} outstanding` },
+    { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews` },
   ];
 
   const activeProjects = projects.filter((p) => p.status === "active" || p.status === "planning");

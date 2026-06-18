@@ -15,6 +15,9 @@ import {
   LogOut,
   Bell,
   Shapes,
+  Briefcase,
+  Receipt,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -27,6 +30,9 @@ const nav = [
   { href: "/projects", label: "Projects", icon: Folder },
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/reminders", label: "Reminders", icon: Bell },
+  { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/invoices", label: "Invoices", icon: Receipt },
+  { href: "/time", label: "Time", icon: Timer },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
   { href: "/notes", label: "Notes", icon: StickyNote },
   { href: "/whiteboards", label: "Whiteboards", icon: Shapes },
