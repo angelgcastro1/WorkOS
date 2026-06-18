@@ -5,6 +5,8 @@ import type {
   Task,
   Note,
   Contact,
+  Reminder,
+  Attachment,
   Profile,
   ProjectStatus,
   Priority,
@@ -54,6 +56,22 @@ interface ContactRow {
   next_follow_up: string | null;
   project_id: string | null;
 }
+interface ReminderRow {
+  id: string;
+  title: string;
+  note: string | null;
+  due_at: string;
+  done: boolean;
+}
+interface AttachmentRow {
+  id: string;
+  note_id: string;
+  name: string;
+  path: string;
+  mime: string | null;
+  size: number | string | null;
+  created_at: string | null;
+}
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -72,17 +90,21 @@ export async function getProfile(): Promise<Profile | null> {
 
 export async function getWorkspace(): Promise<Workspace> {
   const supabase = await createClient();
-  const [pRes, tRes, nRes, cRes] = await Promise.all([
+  const [pRes, tRes, nRes, cRes, rRes, aRes] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: true }),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("notes").select("*").order("date", { ascending: false }),
     supabase.from("contacts").select("*").order("created_at", { ascending: true }),
+    supabase.from("reminders").select("*").order("due_at", { ascending: true }),
+    supabase.from("note_attachments").select("*").order("created_at", { ascending: true }),
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];
   const taskRows = (tRes.data ?? []) as TaskRow[];
   const noteRows = (nRes.data ?? []) as NoteRow[];
   const contactRows = (cRes.data ?? []) as ContactRow[];
+  const reminderRows = (rRes.data ?? []) as ReminderRow[];
+  const attachmentRows = (aRes.data ?? []) as AttachmentRow[];
 
   const projectName = new Map<string, string>(projectRows.map((p) => [p.id, p.name]));
 
@@ -117,6 +139,22 @@ export async function getWorkspace(): Promise<Workspace> {
     };
   });
 
+  const attachmentsByNote = new Map<string, Attachment[]>();
+  for (const a of attachmentRows) {
+    const item: Attachment = {
+      id: a.id,
+      noteId: a.note_id,
+      name: a.name,
+      path: a.path,
+      mime: a.mime,
+      size: a.size === null ? null : Number(a.size),
+      createdAt: a.created_at,
+    };
+    const list = attachmentsByNote.get(a.note_id) ?? [];
+    list.push(item);
+    attachmentsByNote.set(a.note_id, list);
+  }
+
   const notes: Note[] = noteRows.map((n) => ({
     id: n.id,
     title: n.title,
@@ -125,6 +163,7 @@ export async function getWorkspace(): Promise<Workspace> {
     projectId: n.project_id,
     date: n.date,
     tags: n.tags ?? [],
+    attachments: attachmentsByNote.get(n.id) ?? [],
   }));
 
   const contacts: Contact[] = contactRows.map((c) => ({
@@ -141,5 +180,13 @@ export async function getWorkspace(): Promise<Workspace> {
     projectId: c.project_id,
   }));
 
-  return { projects, tasks, notes, contacts };
+  const reminders: Reminder[] = reminderRows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    note: r.note,
+    dueAt: r.due_at,
+    done: r.done,
+  }));
+
+  return { projects, tasks, notes, contacts, reminders };
 }

@@ -38,6 +38,16 @@ export interface Task {
   tags: string[];
 }
 
+export interface Attachment {
+  id: string;
+  noteId: string;
+  name: string;
+  path: string;
+  mime: string | null;
+  size: number | null;
+  createdAt: string | null;
+}
+
 export interface Note {
   id: string;
   title: string;
@@ -46,6 +56,7 @@ export interface Note {
   projectId: string | null;
   date: string | null;
   tags: string[];
+  attachments: Attachment[];
 }
 
 export interface Contact {
@@ -62,9 +73,18 @@ export interface Contact {
   projectId: string | null;
 }
 
+export interface Reminder {
+  id: string;
+  title: string;
+  note: string | null;
+  dueAt: string;
+  done: boolean;
+}
+
 export interface Workspace {
   projects: Project[];
   tasks: Task[];
   notes: Note[];
   contacts: Contact[];
+  reminders: Reminder[];
 }

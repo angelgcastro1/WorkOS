@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ListTodo, Folder, Flag, DollarSign, Activity, Calendar, FileText, Check, Sparkles } from "lucide-react";
+import { ListTodo, Folder, Flag, DollarSign, Activity, Calendar, FileText, Check, Sparkles, Bell } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -22,7 +22,7 @@ type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foo
 
 export default async function DashboardPage() {
   const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
-  const { projects, tasks, notes, contacts } = workspace;
+  const { projects, tasks, notes, contacts, reminders } = workspace;
   const isEmpty = projects.length === 0 && tasks.length === 0 && notes.length === 0 && contacts.length === 0;
 
   if (isEmpty) {
@@ -67,6 +67,13 @@ export default async function DashboardPage() {
     .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
     .slice(0, 4);
   const recentNotes = notes.slice(0, 4);
+  // eslint-disable-next-line react-hooks/purity -- server component renders once per request
+  const nowMs = Date.now();
+  const openReminders = [...reminders]
+    .filter((r) => !r.done)
+    .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+  const upcomingReminders = openReminders.slice(0, 4);
+  const overdueReminders = openReminders.filter((r) => new Date(r.dueAt).getTime() < nowMs).length;
 
   return (
     <div className="space-y-6">
@@ -190,7 +197,33 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-3">
+        <Card className="animate-fade-up">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-4 w-4 text-muted-foreground" /> Reminders
+            </CardTitle>
+            <span className="text-xs text-muted-foreground">{overdueReminders > 0 ? `${overdueReminders} overdue` : "on track"}</span>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {upcomingReminders.length === 0 ? (
+              <p className="py-3 text-center text-sm text-muted-foreground">No reminders set.</p>
+            ) : (
+              upcomingReminders.map((r) => {
+                const diff = Math.round((new Date(r.dueAt).getTime() - nowMs) / 86400000);
+                const isOver = new Date(r.dueAt).getTime() < nowMs;
+                const label = diff < 0 ? "overdue" : diff === 0 ? "today" : `in ${diff}d`;
+                return (
+                  <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
+                    <span className="truncate text-sm">{r.title}</span>
+                    <span className={cn("shrink-0 text-xs", isOver ? "font-semibold text-red-400" : "text-muted-foreground")}>{label}</span>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="animate-fade-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

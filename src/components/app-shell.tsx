@@ -13,16 +13,19 @@ import {
   Search,
   Plus,
   LogOut,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ReminderAlerts } from "@/components/reminder-alerts";
 import { signOut } from "@/app/actions";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: Folder },
   { href: "/tasks", label: "Tasks", icon: ListTodo },
+  { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
   { href: "/notes", label: "Notes", icon: StickyNote },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -118,6 +121,7 @@ export function AppShell({ profile, children }: Props) {
 
         <main className="flex-1 px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>
+      <ReminderAlerts />
     </div>
   );
 }

@@ -117,6 +117,36 @@ export async function deleteNote(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function createReminder(formData: FormData) {
+  const title = str(formData.get("title"));
+  const dueAt = str(formData.get("due_at"));
+  if (!title || !dueAt) return;
+  const supabase = await createClient();
+  await supabase.from("reminders").insert({
+    title,
+    note: str(formData.get("note")),
+    due_at: dueAt,
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function toggleReminder(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const done = str(formData.get("done")) === "true";
+  const supabase = await createClient();
+  await supabase.from("reminders").update({ done: !done }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteReminder(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("reminders").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function seedSampleData() {
   const supabase = await createClient();
   await supabase.rpc("seed_sample_data");

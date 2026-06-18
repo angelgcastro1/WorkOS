@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { getWorkspace } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
 import { createNote } from "@/app/actions";
 import { Card } from "@/components/ui";
 import { NoteCard } from "@/components/note-card";
@@ -10,13 +11,20 @@ const fieldClass =
 
 export default async function NotesPage() {
   const { notes, projects } = await getWorkspace();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const userId = user?.id ?? "";
   const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Notes &amp; Knowledge Base</h1>
-        <p className="text-sm text-muted-foreground">Ideas, meeting notes, client notes, SOPs, and AI prompts. Click the pencil on any note to edit it.</p>
+        <p className="text-sm text-muted-foreground">
+          Click the pencil to edit a note, attach files (PDFs, images, docs), or delete it.
+        </p>
       </header>
 
       <Card>
@@ -55,7 +63,7 @@ export default async function NotesPage() {
       ) : (
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
           {notes.map((n) => (
-            <NoteCard key={n.id} note={n} projects={projectOptions} />
+            <NoteCard key={n.id} note={n} projects={projectOptions} userId={userId} />
           ))}
         </div>
       )}
