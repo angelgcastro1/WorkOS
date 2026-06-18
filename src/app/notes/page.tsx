@@ -1,30 +1,22 @@
 import { Plus } from "lucide-react";
-import type { NoteType } from "@/lib/data";
 import { getWorkspace } from "@/lib/queries";
 import { createNote } from "@/app/actions";
-import { Card, Badge } from "@/components/ui";
-import { cn, formatDate } from "@/lib/utils";
-
-const noteTypeStyle: Record<NoteType, string> = {
-  Idea: "bg-amber-500/15 text-amber-400",
-  Meeting: "bg-sky-500/15 text-sky-400",
-  Client: "bg-emerald-500/15 text-emerald-400",
-  SOP: "bg-violet-500/15 text-violet-400",
-  Prompt: "bg-pink-500/15 text-pink-400",
-  Note: "bg-slate-500/15 text-slate-400",
-};
+import { Card } from "@/components/ui";
+import { NoteCard } from "@/components/note-card";
+import { cn } from "@/lib/utils";
 
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function NotesPage() {
   const { notes, projects } = await getWorkspace();
+  const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Notes &amp; Knowledge Base</h1>
-        <p className="text-sm text-muted-foreground">Ideas, meeting notes, client notes, SOPs, and AI prompts.</p>
+        <p className="text-sm text-muted-foreground">Ideas, meeting notes, client notes, SOPs, and AI prompts. Click the pencil on any note to edit it.</p>
       </header>
 
       <Card>
@@ -41,7 +33,7 @@ export default async function NotesPage() {
             </select>
             <select name="project_id" defaultValue="" className={fieldClass} aria-label="Project">
               <option value="">No project</option>
-              {projects.map((p) => (
+              {projectOptions.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -61,25 +53,9 @@ export default async function NotesPage() {
       {notes.length === 0 ? (
         <div className="py-12 text-center text-sm text-muted-foreground">No notes yet — capture your first above.</div>
       ) : (
-        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 [&>*]:mb-4">
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
           {notes.map((n) => (
-            <Card key={n.id} className="break-inside-avoid p-5">
-              <div className="mb-2 flex items-center justify-between">
-                <Badge className={noteTypeStyle[n.type] ?? noteTypeStyle.Note}>{n.type}</Badge>
-                <span className="text-xs text-muted-foreground">{formatDate(n.date)}</span>
-              </div>
-              <h3 className="text-[15px] font-semibold leading-tight">{n.title}</h3>
-              {n.body ? <p className="mt-1.5 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">{n.body}</p> : null}
-              {n.tags.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {n.tags.map((tag) => (
-                    <span key={tag} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </Card>
+            <NoteCard key={n.id} note={n} projects={projectOptions} />
           ))}
         </div>
       )}

@@ -1,4 +1,4 @@
-// Domain types for WorkOS. Rows come from Supabase (see src/lib/queries.ts) and are
+// Domain types for WorkCham. Rows come from Supabase (see src/lib/queries.ts) and are
 // mapped into these shapes for the UI.
 
 export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";

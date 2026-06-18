@@ -92,6 +92,31 @@ export async function createContact(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function updateNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  const supabase = await createClient();
+  await supabase
+    .from("notes")
+    .update({
+      title,
+      type: str(formData.get("type")) ?? "Note",
+      body: str(formData.get("body")),
+      project_id: str(formData.get("project_id")),
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("notes").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function seedSampleData() {
   const supabase = await createClient();
   await supabase.rpc("seed_sample_data");
