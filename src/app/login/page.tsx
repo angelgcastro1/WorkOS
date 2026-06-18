@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { login, signup } from "@/app/login/actions";
+import { BrandMark } from "@/components/brand-mark";
 
 const inputClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
@@ -16,9 +17,7 @@ export default async function LoginPage({
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-indigo-500/20 blur-3xl" />
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-lg font-bold text-white shadow-lg shadow-indigo-500/40">
-            W
-          </div>
+          <BrandMark height={56} className="shadow-lg shadow-indigo-500/30" />
           <h1 className="mt-4 text-2xl font-bold tracking-tight">Welcome to WorkCham</h1>
           <p className="mt-1 text-sm text-muted-foreground">Your personal command center</p>
         </div>

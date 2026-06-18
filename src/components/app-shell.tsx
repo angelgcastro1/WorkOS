@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ReminderAlerts } from "@/components/reminder-alerts";
+import { BrandMark } from "@/components/brand-mark";
 import { signOut } from "@/app/actions";
 
 const nav = [
@@ -54,9 +55,7 @@ export function AppShell({ profile, children }: Props) {
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 md:flex">
         <div className="flex items-center gap-2.5 px-2 pb-6 pt-1">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">
-            W
-          </div>
+          <BrandMark height={36} className="shadow-lg shadow-indigo-500/20" />
           <div>
             <p className="text-[15px] font-bold leading-none">WorkCham</p>
             <p className="text-[11px] text-muted-foreground">Personal command center</p>

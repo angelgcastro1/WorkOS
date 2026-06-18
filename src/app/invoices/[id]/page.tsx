@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { getWorkspace, getProfile } from "@/lib/queries";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { PrintButton } from "@/components/print-button";
+import { BrandMark } from "@/components/brand-mark";
 
 export default async function InvoiceViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,10 +35,13 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
 
       <div className="print-area rounded-2xl bg-white p-8 text-slate-900 shadow-sm sm:p-10">
         <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <p className="text-lg font-bold">{profile?.businessName || profile?.name || "Your business"}</p>
-            {profile?.businessEmail ? <p className="text-sm text-slate-500">{profile.businessEmail}</p> : null}
-            {profile?.businessAddress ? <p className="whitespace-pre-line text-sm text-slate-500">{profile.businessAddress}</p> : null}
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandMark height={44} />
+            <div className="min-w-0">
+              <p className="text-lg font-bold">{profile?.businessName || profile?.name || "Your business"}</p>
+              {profile?.businessEmail ? <p className="text-sm text-slate-500">{profile.businessEmail}</p> : null}
+              {profile?.businessAddress ? <p className="whitespace-pre-line text-sm text-slate-500">{profile.businessAddress}</p> : null}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold tracking-tight">INVOICE</p>
