@@ -19,7 +19,7 @@ export default async function LoginPage({
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-lg font-bold text-white shadow-lg shadow-indigo-500/40">
             W
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight">Welcome to WorkOS</h1>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">Welcome to WorkCHAM</h1>
           <p className="mt-1 text-sm text-muted-foreground">Your personal command center</p>
         </div>
 
