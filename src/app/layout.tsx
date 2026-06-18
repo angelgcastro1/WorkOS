@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WorkOS — Personal Command Center",
+  title: "WorkCHAM — Personal Command Center",
   description: "Your projects, tasks, notes, and metrics in one place.",
 };
 
 // Static, no-user-input script that applies the saved theme before first paint to avoid a flash.
-const noFlashTheme = `(function(){try{var t=localStorage.getItem('workos-theme');document.documentElement.classList.toggle('dark', t? t==='dark':true);}catch(e){}})();`;
+const noFlashTheme = `(function(){try{var t=localStorage.getItem('WorkCHAM-theme');document.documentElement.classList.toggle('dark', t? t==='dark':true);}catch(e){}})();`;
 
 export default async function RootLayout({
   children,
