@@ -147,6 +147,34 @@ export async function deleteReminder(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function updateProject(formData: FormData) {
+  const id = str(formData.get("id"));
+  const name = str(formData.get("name"));
+  if (!id || !name) return;
+  const supabase = await createClient();
+  await supabase
+    .from("projects")
+    .update({
+      name,
+      status: str(formData.get("status")) ?? "planning",
+      priority: str(formData.get("priority")) ?? "medium",
+      category: str(formData.get("category")),
+      client: str(formData.get("client")),
+      deadline: str(formData.get("deadline")),
+      note: str(formData.get("note")),
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteProject(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("projects").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function createApplication(formData: FormData) {
   const company = str(formData.get("company"));
   if (!company) return;
