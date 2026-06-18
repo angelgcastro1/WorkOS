@@ -10,6 +10,8 @@ import type {
   Application,
   Invoice,
   TimeEntry,
+  Client,
+  LineItem,
   Profile,
   ProjectStatus,
   Priority,
@@ -89,13 +91,16 @@ interface ApplicationRow {
 }
 interface InvoiceRow {
   id: string;
-  client: string;
-  project_id: string | null;
+  invoice_number: string | null;
+  client: string | null;
+  client_id: string | null;
   amount: number | string | null;
   status: string;
   issued_on: string | null;
   due_on: string | null;
   paid_on: string | null;
+  line_items: unknown;
+  tax_rate: number | string | null;
   notes: string | null;
 }
 interface TimeEntryRow {
@@ -105,6 +110,31 @@ interface TimeEntryRow {
   minutes: number | null;
   entry_date: string | null;
 }
+interface ClientRow {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+}
+interface RawLineItem {
+  description?: unknown;
+  quantity?: unknown;
+  rate?: unknown;
+}
+
+function mapLineItems(raw: unknown): LineItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const li = (item ?? {}) as RawLineItem;
+    return {
+      description: typeof li.description === "string" ? li.description : "",
+      quantity: Number(li.quantity) || 0,
+      rate: Number(li.rate) || 0,
+    };
+  });
+}
 
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -113,17 +143,24 @@ export async function getProfile(): Promise<Profile | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase.from("profiles").select("id, name, role").eq("id", user.id).maybeSingle();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, name, role, business_name, business_email, business_address")
+    .eq("id", user.id)
+    .maybeSingle();
   return {
     id: user.id,
     name: data?.name ?? user.email?.split("@")[0] ?? "You",
     role: data?.role ?? "Member",
+    businessName: data?.business_name ?? null,
+    businessEmail: data?.business_email ?? user.email ?? null,
+    businessAddress: data?.business_address ?? null,
   };
 }
 
 export async function getWorkspace(): Promise<Workspace> {
   const supabase = await createClient();
-  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes] = await Promise.all([
+  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: true }),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("notes").select("*").order("date", { ascending: false }),
@@ -133,6 +170,7 @@ export async function getWorkspace(): Promise<Workspace> {
     supabase.from("applications").select("*").order("applied_on", { ascending: false }),
     supabase.from("invoices").select("*").order("issued_on", { ascending: false }),
     supabase.from("time_entries").select("*").order("entry_date", { ascending: false }),
+    supabase.from("clients").select("*").order("name", { ascending: true }),
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];
@@ -144,6 +182,7 @@ export async function getWorkspace(): Promise<Workspace> {
   const applicationRows = (appRes.data ?? []) as ApplicationRow[];
   const invoiceRows = (invRes.data ?? []) as InvoiceRow[];
   const timeEntryRows = (teRes.data ?? []) as TimeEntryRow[];
+  const clientRows = (clRes.data ?? []) as ClientRow[];
 
   const projectName = new Map<string, string>(projectRows.map((p) => [p.id, p.name]));
 
@@ -240,13 +279,16 @@ export async function getWorkspace(): Promise<Workspace> {
 
   const invoices: Invoice[] = invoiceRows.map((i) => ({
     id: i.id,
+    invoiceNumber: i.invoice_number,
     client: i.client,
-    projectId: i.project_id,
+    clientId: i.client_id,
     amount: Number(i.amount) || 0,
     status: i.status as InvoiceStatus,
     issuedOn: i.issued_on,
     dueOn: i.due_on,
     paidOn: i.paid_on,
+    lineItems: mapLineItems(i.line_items),
+    taxRate: Number(i.tax_rate) || 0,
     notes: i.notes,
   }));
 
@@ -258,5 +300,14 @@ export async function getWorkspace(): Promise<Workspace> {
     entryDate: te.entry_date,
   }));
 
-  return { projects, tasks, notes, contacts, reminders, applications, invoices, timeEntries };
+  const clients: Client[] = clientRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    company: c.company,
+    email: c.email,
+    phone: c.phone,
+    address: c.address,
+  }));
+
+  return { projects, tasks, notes, contacts, reminders, applications, invoices, timeEntries, clients };
 }

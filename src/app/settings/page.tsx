@@ -3,7 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getProfile } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
-import { seedSampleData, signOut } from "@/app/actions";
+import { seedSampleData, signOut, updateBusinessInfo } from "@/app/actions";
+
+const fieldClass =
+  "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function SettingsPage() {
   const profile = await getProfile();
@@ -46,6 +49,37 @@ export default async function SettingsPage() {
             <p className="text-xs text-muted-foreground">Switch between dark and light mode.</p>
           </div>
           <ThemeToggle />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Business details</CardTitle>
+          <span className="text-xs text-muted-foreground">Shown as the “From” on your invoices</span>
+        </CardHeader>
+        <CardContent>
+          <form action={updateBusinessInfo} className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Business name</label>
+              <input name="business_name" defaultValue={profile?.businessName ?? ""} placeholder="e.g. Cham Media" className={fieldClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Business email</label>
+              <input name="business_email" defaultValue={profile?.businessEmail ?? ""} placeholder="you@business.com" className={fieldClass} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Address</label>
+              <textarea name="business_address" defaultValue={profile?.businessAddress ?? ""} rows={2} placeholder="Street, City, Country" className={`${fieldClass} resize-y`} />
+            </div>
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110"
+              >
+                Save business details
+              </button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 

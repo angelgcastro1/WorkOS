@@ -12,6 +12,9 @@ export interface Profile {
   id: string;
   name: string;
   role: string;
+  businessName: string | null;
+  businessEmail: string | null;
+  businessAddress: string | null;
 }
 
 export interface Project {
@@ -94,15 +97,33 @@ export interface Application {
   notes: string | null;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+}
+
+export interface LineItem {
+  description: string;
+  quantity: number;
+  rate: number;
+}
+
 export interface Invoice {
   id: string;
-  client: string;
-  projectId: string | null;
+  invoiceNumber: string | null;
+  client: string | null;
+  clientId: string | null;
   amount: number;
   status: InvoiceStatus;
   issuedOn: string | null;
   dueOn: string | null;
   paidOn: string | null;
+  lineItems: LineItem[];
+  taxRate: number;
   notes: string | null;
 }
 
@@ -123,4 +144,5 @@ export interface Workspace {
   applications: Application[];
   invoices: Invoice[];
   timeEntries: TimeEntry[];
+  clients: Client[];
 }
