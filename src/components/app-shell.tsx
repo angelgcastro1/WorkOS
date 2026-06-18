@@ -12,11 +12,12 @@ import {
   Settings,
   Search,
   Plus,
-  Sparkles,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { profile } from "@/lib/data";
+import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { signOut } from "@/app/actions";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -27,9 +28,16 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+type Props = {
+  profile: Profile | null;
+  children: ReactNode;
+};
+
+export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
   if (pathname === "/login") return <>{children}</>;
+
+  const initials = profile?.name?.trim()?.[0]?.toUpperCase() ?? "W";
 
   return (
     <div className="flex min-h-screen">
@@ -66,13 +74,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-auto flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-            {profile.initials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{profile.name}</p>
-            <p className="truncate text-xs text-muted-foreground">{profile.role}</p>
+        <div className="mt-auto space-y-2">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{profile?.name ?? "You"}</p>
+              <p className="truncate text-xs text-muted-foreground">{profile?.role ?? "Member"}</p>
+            </div>
+            <form action={signOut}>
+              <button
+                type="submit"
+                aria-label="Sign out"
+                className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </form>
           </div>
         </div>
       </aside>
@@ -82,24 +101,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-muted-foreground">
             <Search className="h-4 w-4" />
             <input
-              placeholder="Search…  ⌘K"
+              placeholder="Search…"
               className="w-32 bg-transparent text-sm outline-none placeholder:text-muted-foreground md:w-56"
             />
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
-            >
-              <Sparkles className="h-4 w-4 text-violet-400" /> Ask AI
-            </button>
             <ThemeToggle />
-            <button
-              type="button"
+            <Link
+              href="/tasks"
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110"
             >
               <Plus className="h-4 w-4" /> New
-            </button>
+            </Link>
           </div>
         </header>
 

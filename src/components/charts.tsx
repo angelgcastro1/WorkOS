@@ -26,7 +26,7 @@ const tooltipStyle = {
   fontSize: 12,
 } as const;
 
-type WeeklyDatum = { week: string; completed: number; applications: number };
+type WeeklyDatum = { week: string; completed: number };
 
 export function WeeklyTrend({ data }: { data: WeeklyDatum[] }) {
   return (
@@ -38,17 +38,12 @@ export function WeeklyTrend({ data }: { data: WeeklyDatum[] }) {
               <stop offset="0%" stopColor="#6366f1" stopOpacity={0.5} />
               <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
             </linearGradient>
-            <linearGradient id="gradApps" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.4} />
-              <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
-            </linearGradient>
           </defs>
           <CartesianGrid stroke={gridStroke} vertical={false} />
           <XAxis dataKey="week" tick={axisTick} tickLine={false} axisLine={false} />
-          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} />
+          <YAxis tick={axisTick} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
           <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: "#6366f1", strokeOpacity: 0.25 }} />
-          <Area type="monotone" dataKey="completed" name="Tasks" stroke="#6366f1" strokeWidth={2.5} fill="url(#gradCompleted)" />
-          <Area type="monotone" dataKey="applications" name="Applications" stroke="#22d3ee" strokeWidth={2} fill="url(#gradApps)" />
+          <Area type="monotone" dataKey="completed" name="Completed" stroke="#6366f1" strokeWidth={2.5} fill="url(#gradCompleted)" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

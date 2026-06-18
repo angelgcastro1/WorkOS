@@ -1,47 +1,37 @@
-import { Database, Rocket, Download } from "lucide-react";
+import { Database, Sparkles, LogOut } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { profile, metrics } from "@/lib/data";
-import { formatMoney } from "@/lib/utils";
+import { getProfile } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
+import { seedSampleData, signOut } from "@/app/actions";
 
-const inputClass =
-  "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
-const labelClass = "mb-1.5 block text-xs font-medium text-muted-foreground";
+export default async function SettingsPage() {
+  const profile = await getProfile();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const initials = profile?.name?.trim()?.[0]?.toUpperCase() ?? "W";
 
-export default function SettingsPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your profile, goals, and workspace.</p>
+        <p className="text-sm text-muted-foreground">Your account, appearance, and workspace data.</p>
       </header>
 
       <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
-              {profile.initials}
-            </div>
-            <button type="button" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium transition hover:bg-muted">
-              Change photo
-            </button>
+        <CardContent className="flex items-center gap-4">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">
+            {initials}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Name</label>
-              <input className={inputClass} defaultValue={profile.name} />
-            </div>
-            <div>
-              <label className={labelClass}>Role</label>
-              <input className={inputClass} defaultValue={profile.role} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Email</label>
-              <input className={inputClass} defaultValue="angel@studio.com" />
-            </div>
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold">{profile?.name ?? "You"}</p>
+            <p className="text-xs text-muted-foreground">{profile?.role ?? "Member"}</p>
+            <p className="text-xs text-muted-foreground">{user?.email ?? ""}</p>
           </div>
         </CardContent>
       </Card>
@@ -61,22 +51,6 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Goals</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelClass}>Monthly income goal</label>
-            <input className={inputClass} defaultValue={formatMoney(metrics.incomeGoal)} />
-          </div>
-          <div>
-            <label className={labelClass}>Weekly task target</label>
-            <input className={inputClass} defaultValue="20" />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Workspace &amp; data</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -85,34 +59,45 @@ export default function SettingsPage() {
               <Database className="h-5 w-5 text-emerald-400" />
               <div>
                 <p className="text-sm font-medium">Supabase database</p>
-                <p className="text-xs text-muted-foreground">Not connected — enables login + cloud sync.</p>
+                <p className="text-xs text-emerald-400">Connected — your data is private to your account.</p>
               </div>
             </div>
-            <button type="button" className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110">
-              Connect
-            </button>
           </div>
+
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-3">
             <div className="flex items-center gap-3">
-              <Rocket className="h-5 w-5 text-sky-400" />
+              <Sparkles className="h-5 w-5 text-violet-400" />
               <div>
-                <p className="text-sm font-medium">Deploy on Vercel</p>
-                <p className="text-xs text-muted-foreground">Push to a live URL on any device.</p>
+                <p className="text-sm font-medium">Load sample data</p>
+                <p className="text-xs text-muted-foreground">Adds a starter set if your workspace is empty.</p>
               </div>
             </div>
-            <span className="text-xs text-muted-foreground">See README</span>
+            <form action={seedSampleData}>
+              <button
+                type="submit"
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
+              >
+                Load
+              </button>
+            </form>
           </div>
+
           <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-3">
             <div className="flex items-center gap-3">
-              <Download className="h-5 w-5 text-violet-400" />
+              <LogOut className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-sm font-medium">Export data</p>
-                <p className="text-xs text-muted-foreground">Download a JSON backup of your workspace.</p>
+                <p className="text-sm font-medium">Sign out</p>
+                <p className="text-xs text-muted-foreground">End your session on this device.</p>
               </div>
             </div>
-            <button type="button" className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium transition hover:bg-muted">
-              Export
-            </button>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium transition hover:bg-muted"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </CardContent>
       </Card>

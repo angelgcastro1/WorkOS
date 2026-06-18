@@ -1,24 +1,9 @@
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
-import { WeeklyTrend, IncomeBars, CategoryBars, StatusDonut, FunnelBars } from "@/components/charts";
-import { metrics, weeklyProgress, incomeByMonth, contentByCategory, jobFunnel, tasks } from "@/lib/data";
+import { WeeklyTrend, CategoryBars, StatusDonut, FunnelBars } from "@/components/charts";
+import { getWorkspace } from "@/lib/queries";
+import { deriveKpis, weeklyCompleted, tasksByStatus, projectsByCategory, pipelineByStage } from "@/lib/metrics";
 import { formatMoney } from "@/lib/utils";
-
-const statusData = [
-  { name: "Done", value: tasks.filter((t) => t.status === "done").length, color: "#10b981" },
-  { name: "In progress", value: tasks.filter((t) => t.status === "in_progress").length, color: "#6366f1" },
-  { name: "To do", value: tasks.filter((t) => t.status === "todo").length, color: "#64748b" },
-  { name: "Blocked", value: tasks.filter((t) => t.status === "blocked").length, color: "#ef4444" },
-];
-
-const stats: { label: string; value: string; sub?: string }[] = [
-  { label: "Applications sent", value: String(metrics.applicationsSent), sub: "all time" },
-  { label: "Interviews booked", value: String(metrics.interviewsBooked), sub: "from 27 applications" },
-  { label: "Portfolio visits", value: metrics.portfolioVisits.toLocaleString(), sub: "this month" },
-  { label: "Content posted", value: String(metrics.contentPosted), sub: "this month" },
-  { label: "Completion rate", value: `${metrics.completionRate}%`, sub: "weekly tasks" },
-  { label: "Income · June", value: formatMoney(metrics.incomeMonth), sub: `of ${formatMoney(metrics.incomeGoal)}` },
-];
 
 function ChartCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -32,12 +17,26 @@ function ChartCard({ title, hint, children }: { title: string; hint?: string; ch
   );
 }
 
-export default function MetricsPage() {
+export default async function MetricsPage() {
+  const workspace = await getWorkspace();
+  const { tasks, projects, contacts } = workspace;
+  const kpi = deriveKpis(workspace);
+  const statusData = tasksByStatus(tasks);
+
+  const stats: { label: string; value: string; sub?: string }[] = [
+    { label: "Open tasks", value: String(kpi.openTasks), sub: `${kpi.overdue} overdue` },
+    { label: "Done · 7 days", value: String(kpi.doneThisWeek), sub: "this week" },
+    { label: "Completion", value: `${kpi.completionRate}%`, sub: "all tasks" },
+    { label: "Active projects", value: String(kpi.activeProjects), sub: `${projects.length} total` },
+    { label: "Pipeline", value: formatMoney(kpi.pipelineValue), sub: `${formatMoney(kpi.wonValue)} won` },
+    { label: "Contacts", value: String(kpi.contacts), sub: "in CRM" },
+  ];
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Metrics</h1>
-        <p className="text-sm text-muted-foreground">How your work, job search, and business are trending.</p>
+        <p className="text-sm text-muted-foreground">Everything below is computed from your live data.</p>
       </header>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -53,15 +52,10 @@ export default function MetricsPage() {
       </section>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <ChartCard title="Tasks completed & applications" hint="last 8 weeks">
-          <WeeklyTrend data={weeklyProgress} />
+        <ChartCard title="Tasks completed" hint="last 8 weeks">
+          <WeeklyTrend data={weeklyCompleted(tasks)} />
         </ChartCard>
-        <ChartCard title="Monthly income vs goal" hint="2026">
-          <IncomeBars data={incomeByMonth} />
-        </ChartCard>
-        <ChartCard title="Creative output by type" hint="this month">
-          <CategoryBars data={contentByCategory} />
-        </ChartCard>
+
         <ChartCard title="Tasks by status">
           <div className="flex items-center gap-4">
             <div className="flex-1">
@@ -78,28 +72,21 @@ export default function MetricsPage() {
             </div>
           </div>
         </ChartCard>
-        <ChartCard title="Job search funnel" hint="applied → offer">
-          <FunnelBars data={jobFunnel} />
+
+        <ChartCard title="Projects by category">
+          {projects.length === 0 ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">No projects yet.</p>
+          ) : (
+            <CategoryBars data={projectsByCategory(projects)} />
+          )}
         </ChartCard>
-        <ChartCard title="This week at a glance">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-3xl font-bold tabular-nums text-emerald-400">{metrics.tasksDoneWeek}</p>
-              <p className="text-xs text-muted-foreground">tasks completed</p>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-3xl font-bold tabular-nums text-indigo-400">{metrics.completionRate}%</p>
-              <p className="text-xs text-muted-foreground">completion rate</p>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-3xl font-bold tabular-nums text-sky-400">{metrics.leadsContacted}</p>
-              <p className="text-xs text-muted-foreground">leads contacted</p>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/40 p-4">
-              <p className="text-3xl font-bold tabular-nums text-amber-400">+{Math.round(((metrics.portfolioVisits - metrics.portfolioVisitsPrev) / metrics.portfolioVisitsPrev) * 100)}%</p>
-              <p className="text-xs text-muted-foreground">portfolio traffic</p>
-            </div>
-          </div>
+
+        <ChartCard title="CRM pipeline" hint="contacts by stage">
+          {contacts.length === 0 ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">No contacts yet.</p>
+          ) : (
+            <FunnelBars data={pipelineByStage(contacts)} />
+          )}
         </ChartCard>
       </div>
     </div>
