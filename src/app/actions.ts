@@ -147,6 +147,21 @@ export async function deleteReminder(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function createWhiteboard() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("whiteboards").insert({ title: "Untitled board" }).select("id").single();
+  revalidatePath("/whiteboards");
+  if (data?.id) redirect(`/whiteboards/${data.id}`);
+}
+
+export async function deleteWhiteboard(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("whiteboards").delete().eq("id", id);
+  revalidatePath("/whiteboards");
+}
+
 export async function seedSampleData() {
   const supabase = await createClient();
   await supabase.rpc("seed_sample_data");

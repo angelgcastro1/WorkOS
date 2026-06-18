@@ -14,6 +14,7 @@ import {
   Plus,
   LogOut,
   Bell,
+  Shapes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -28,6 +29,7 @@ const nav = [
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
   { href: "/notes", label: "Notes", icon: StickyNote },
+  { href: "/whiteboards", label: "Whiteboards", icon: Shapes },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
