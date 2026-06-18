@@ -47,7 +47,7 @@ export function AppShell({ profile, children }: Props) {
             W
           </div>
           <div>
-            <p className="text-[15px] font-bold leading-none">WorkOS</p>
+            <p className="text-[15px] font-bold leading-none">WorkCHAM</p>
             <p className="text-[11px] text-muted-foreground">Personal command center</p>
           </div>
         </div>
