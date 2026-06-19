@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ReminderAlerts } from "@/components/reminder-alerts";
+import { CommandPalette } from "@/components/command-palette";
 import { BrandMark } from "@/components/brand-mark";
 import { signOut } from "@/app/actions";
 
@@ -110,13 +111,15 @@ export function AppShell({ profile, children }: Props) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur md:px-8">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted"
+          >
             <Search className="h-4 w-4" />
-            <input
-              placeholder="Search…"
-              className="w-32 bg-transparent text-sm outline-none placeholder:text-muted-foreground md:w-56"
-            />
-          </div>
+            <span className="hidden text-left md:inline md:w-48">Search…</span>
+            <kbd className="ml-1 hidden rounded border border-border px-1.5 text-[10px] md:inline">⌘K</kbd>
+          </button>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
             <Link
@@ -131,6 +134,7 @@ export function AppShell({ profile, children }: Props) {
         <main className="flex-1 px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>
       <ReminderAlerts />
+      <CommandPalette />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import type { CalendarEvent, Client, Project, Invoice, Reminder, Task, EventType
 import { createEvent, updateEvent, deleteEvent } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
-type View = "month" | "week" | "agenda";
+type View = "month" | "week" | "day" | "agenda";
 
 type Props = {
   events: CalendarEvent[];
@@ -193,11 +193,18 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
   function shift(dir: number) {
     if (view === "month") setCursor(addMonthsIso(cursor, dir));
     else if (view === "week") setCursor(addDaysIso(cursor, dir * 7));
+    else if (view === "day") setCursor(addDaysIso(cursor, dir));
     else setCursor(addDaysIso(cursor, dir * 14));
   }
 
   const headerLabel =
-    view === "month" ? monthLabel(cursor) : view === "week" ? `Week of ${shortDate(startOfWeekIso(cursor))}` : `Agenda from ${shortDate(cursor)}`;
+    view === "month"
+      ? monthLabel(cursor)
+      : view === "week"
+        ? `Week of ${shortDate(startOfWeekIso(cursor))}`
+        : view === "day"
+          ? weekdayLabel(cursor)
+          : `Agenda from ${shortDate(cursor)}`;
 
   async function handleSave(formData: FormData) {
     if (editor?.mode === "edit" && editor.event) formData.set("id", editor.event.id);
@@ -242,7 +249,7 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
         <h2 className="text-lg font-semibold">{headerLabel}</h2>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-lg border border-border p-0.5 text-sm">
-            {(["month", "week", "agenda"] as View[]).map((v) => (
+            {(["month", "week", "day", "agenda"] as View[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -263,6 +270,7 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
 
       {view === "month" ? <MonthView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} onMore={(d) => { setCursor(d); setView("agenda"); }} /> : null}
       {view === "week" ? <WeekView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
+      {view === "day" ? <DayView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
       {view === "agenda" ? <AgendaView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
 
       {editor ? (
@@ -459,6 +467,53 @@ function AgendaView({
   );
 }
 
+function DayView({
+  cursor,
+  todayIso,
+  itemsForDate,
+  onAdd,
+  onEdit,
+}: {
+  cursor: string;
+  todayIso: string;
+  itemsForDate: (iso: string) => DayItem[];
+  onAdd: (iso: string) => void;
+  onEdit: (ev: CalendarEvent) => void;
+}) {
+  const items = itemsForDate(cursor);
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className={cn("text-sm font-semibold", cursor === todayIso && "text-primary")}>{cursor === todayIso ? "Today · " : ""}{weekdayLabel(cursor)}</p>
+        <button onClick={() => onAdd(cursor)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted">
+          <Plus className="h-4 w-4" /> Add
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Nothing scheduled this day.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map((it) =>
+            it.event ? (
+              <button key={it.key} onClick={() => onEdit(it.event!)} className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition hover:bg-muted">
+                <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">{it.time ? fmtTime(it.time) : "all day"}</span>
+                <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{TYPE_LABEL[it.event.type]}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
+              </button>
+            ) : (
+              <Link key={it.key} href={it.href ?? "#"} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 transition hover:bg-muted">
+                <span className="w-16 shrink-0 text-xs text-muted-foreground">{it.time ? fmtTime(it.time) : "—"}</span>
+                <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{it.kind}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
+              </Link>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EventEditor({
   editor,
   clients,
@@ -563,7 +618,23 @@ function EventEditor({
           </div>
           <div className="sm:col-span-2">
             <label className={labelClass}>Notes</label>
-            <textarea name="notes" defaultValue={ev?.notes ?? ""} rows={2} placeholder="Agenda, address, details…" className={cn(fieldClass, "resize-y")} />
+            <textarea name="notes" defaultValue={ev?.notes ?? ""} rows={2} placeholder="Any extra details…" className={cn(fieldClass, "resize-y")} />
+          </div>
+
+          <div className="mt-1 border-t border-border pt-3 sm:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Meeting details</p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Attendees</label>
+            <input name="attendees" defaultValue={ev?.attendees ?? ""} placeholder="Comma-separated names or emails" className={fieldClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Agenda</label>
+            <textarea name="agenda" defaultValue={ev?.agenda ?? ""} rows={2} placeholder="What you'll cover" className={cn(fieldClass, "resize-y")} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Action items</label>
+            <textarea name="action_items" defaultValue={ev?.actionItems ?? ""} rows={2} placeholder="One per line" className={cn(fieldClass, "resize-y")} />
           </div>
 
           <div className="mt-1 flex items-center gap-2 sm:col-span-2">

@@ -6,6 +6,25 @@ import { createClient } from "@/lib/supabase/client";
 
 type DueItem = { id: string; title: string };
 
+// Latest occurrence reminder timestamp (ms) at or before now, honoring the repeat rule.
+function latestDueMs(reminderIso: string, rule: string, nowMs: number): number | null {
+  const baseMs = new Date(reminderIso).getTime();
+  if (Number.isNaN(baseMs) || baseMs > nowMs) return null;
+  if (rule === "daily") return baseMs + Math.floor((nowMs - baseMs) / 86400000) * 86400000;
+  if (rule === "weekly") return baseMs + Math.floor((nowMs - baseMs) / 604800000) * 604800000;
+  if (rule === "monthly") {
+    const d = new Date(baseMs);
+    for (let i = 0; i < 600; i++) {
+      const n = new Date(d);
+      n.setUTCMonth(n.getUTCMonth() + 1);
+      if (n.getTime() > nowMs) break;
+      d.setTime(n.getTime());
+    }
+    return d.getTime();
+  }
+  return baseMs;
+}
+
 export function ReminderAlerts() {
   const [toasts, setToasts] = useState<DueItem[]>([]);
   const alerted = useRef<Set<string>>(new Set());
@@ -36,7 +55,7 @@ export function ReminderAlerts() {
     async function check() {
       const now = new Date();
       const nowIso = now.toISOString();
-      const dayAgoIso = new Date(now.getTime() - 86400000).toISOString();
+      const nowMs = now.getTime();
 
       const { data: remData } = await supabase.from("reminders").select("id, title").eq("done", false).lte("due_at", nowIso);
       const rems = (remData ?? []) as { id: string; title: string }[];
@@ -44,13 +63,18 @@ export function ReminderAlerts() {
 
       const { data: evData } = await supabase
         .from("events")
-        .select("id, title, start_time, reminder_at, reminder_channel")
+        .select("id, title, start_time, reminder_at, reminder_channel, repeat_rule")
         .not("reminder_at", "is", null)
         .in("reminder_channel", ["both", "in_app"])
-        .lte("reminder_at", nowIso)
-        .gte("reminder_at", dayAgoIso);
-      const evs = (evData ?? []) as { id: string; title: string; start_time: string | null }[];
-      notify(evs.map((e) => ({ id: `ev:${e.id}`, title: e.start_time ? `${e.title} · ${e.start_time.slice(0, 5)}` : e.title })));
+        .lte("reminder_at", nowIso);
+      const evs = (evData ?? []) as { id: string; title: string; start_time: string | null; reminder_at: string; repeat_rule: string | null }[];
+      const evItems: DueItem[] = [];
+      for (const e of evs) {
+        const dueMs = latestDueMs(e.reminder_at, e.repeat_rule ?? "none", nowMs);
+        if (dueMs == null || nowMs - dueMs > 86400000) continue;
+        evItems.push({ id: `ev:${e.id}:${dueMs}`, title: e.start_time ? `${e.title} · ${e.start_time.slice(0, 5)}` : e.title });
+      }
+      notify(evItems);
     }
 
     check();

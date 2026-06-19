@@ -132,6 +132,9 @@ interface EventRow {
   project_id: string | null;
   notes: string | null;
   meeting_link: string | null;
+  attendees: string | null;
+  agenda: string | null;
+  action_items: string | null;
   reminder_minutes: number | null;
   reminder_channel: string | null;
   repeat_rule: string | null;
@@ -342,6 +345,9 @@ export async function getWorkspace(): Promise<Workspace> {
     projectId: e.project_id,
     notes: e.notes,
     meetingLink: e.meeting_link,
+    attendees: e.attendees,
+    agenda: e.agenda,
+    actionItems: e.action_items,
     reminderMinutes: e.reminder_minutes,
     reminderChannel: e.reminder_channel ?? "both",
     repeatRule: (e.repeat_rule ?? "none") as RepeatRule,

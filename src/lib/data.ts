@@ -151,6 +151,9 @@ export interface CalendarEvent {
   projectId: string | null;
   notes: string | null;
   meetingLink: string | null;
+  attendees: string | null;
+  agenda: string | null;
+  actionItems: string | null;
   reminderMinutes: number | null;
   reminderChannel: string;
   repeatRule: RepeatRule;
