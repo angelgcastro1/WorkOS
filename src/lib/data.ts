@@ -13,8 +13,10 @@ export interface Profile {
   name: string;
   role: string;
   businessName: string | null;
+  businessContactName: string | null;
   businessEmail: string | null;
   businessAddress: string | null;
+  businessPhone: string | null;
 }
 
 export interface Project {

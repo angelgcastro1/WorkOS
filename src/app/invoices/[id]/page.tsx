@@ -31,8 +31,10 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
 
       <InvoicePaper
         businessName={profile?.businessName || profile?.name || null}
+        businessContactName={profile?.businessContactName ?? null}
         businessEmail={profile?.businessEmail ?? null}
         businessAddress={profile?.businessAddress ?? null}
+        businessPhone={profile?.businessPhone ?? null}
         invoiceNumber={invoice.invoiceNumber}
         issuedOn={invoice.issuedOn}
         dueOn={invoice.dueOn}

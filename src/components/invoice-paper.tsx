@@ -11,8 +11,10 @@ type InvoicePaperClient = {
 
 type InvoicePaperProps = {
   businessName: string | null;
+  businessContactName: string | null;
   businessEmail: string | null;
   businessAddress: string | null;
+  businessPhone: string | null;
   invoiceNumber: string | null;
   issuedOn: string | null;
   dueOn: string | null;
@@ -25,8 +27,10 @@ type InvoicePaperProps = {
 
 export function InvoicePaper({
   businessName,
+  businessContactName,
   businessEmail,
   businessAddress,
+  businessPhone,
   invoiceNumber,
   issuedOn,
   dueOn,
@@ -43,15 +47,17 @@ export function InvoicePaper({
   return (
     <div className="print-area rounded-2xl bg-white p-8 text-slate-900 shadow-sm sm:p-10">
       <div className="flex items-start justify-between gap-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <BrandMark height={44} />
-          <div className="min-w-0">
-            <p className="text-lg font-bold">{businessName || "Your business"}</p>
-            {businessEmail ? <p className="text-sm text-slate-500">{businessEmail}</p> : null}
-            {businessAddress ? <p className="whitespace-pre-line text-sm text-slate-500">{businessAddress}</p> : null}
+        <div className="min-w-0">
+          <BrandMark src="/cham-media-logo.png" alt="Cham Media logo" height={72} />
+          <div className="mt-3 text-sm leading-relaxed">
+            <p className="text-base font-bold text-slate-900">{businessName || "Your business"}</p>
+            {businessContactName ? <p className="text-slate-600">{businessContactName}</p> : null}
+            {businessAddress ? <p className="whitespace-pre-line text-slate-500">{businessAddress}</p> : null}
+            {businessEmail ? <p className="text-slate-500">{businessEmail}</p> : null}
+            {businessPhone ? <p className="text-slate-500">{businessPhone}</p> : null}
           </div>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <p className="text-2xl font-bold tracking-tight">INVOICE</p>
           {invoiceNumber ? <p className="text-sm text-slate-500">{invoiceNumber}</p> : null}
           <p className="mt-2 text-xs text-slate-500">Issued {formatDate(issuedOn)}</p>

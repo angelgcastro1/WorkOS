@@ -64,12 +64,20 @@ export default async function SettingsPage() {
               <input name="business_name" defaultValue={profile?.businessName ?? ""} placeholder="e.g. Cham Media" className={fieldClass} />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Your name</label>
+              <input name="business_contact_name" defaultValue={profile?.businessContactName ?? ""} placeholder="e.g. Angel Castro" className={fieldClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Phone</label>
+              <input name="business_phone" defaultValue={profile?.businessPhone ?? ""} placeholder="(555) 123-4567" className={fieldClass} />
+            </div>
+            <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Business email</label>
               <input name="business_email" defaultValue={profile?.businessEmail ?? ""} placeholder="you@business.com" className={fieldClass} />
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Address</label>
-              <textarea name="business_address" defaultValue={profile?.businessAddress ?? ""} rows={2} placeholder="Street, City, Country" className={`${fieldClass} resize-y`} />
+              <textarea name="business_address" defaultValue={profile?.businessAddress ?? ""} rows={2} placeholder="e.g. Port St. Lucie, Florida" className={`${fieldClass} resize-y`} />
             </div>
             <div className="sm:col-span-2">
               <button

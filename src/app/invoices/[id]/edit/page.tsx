@@ -22,8 +22,10 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
         invoice={invoice}
         defaultNumber={invoice.invoiceNumber ?? ""}
         businessName={profile?.businessName || profile?.name || null}
+        businessContactName={profile?.businessContactName ?? null}
         businessEmail={profile?.businessEmail ?? null}
         businessAddress={profile?.businessAddress ?? null}
+        businessPhone={profile?.businessPhone ?? null}
         todayIso={todayIso}
       />
     </div>

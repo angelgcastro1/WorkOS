@@ -20,8 +20,10 @@ type Props = {
   invoice?: Invoice;
   defaultNumber: string;
   businessName: string | null;
+  businessContactName: string | null;
   businessEmail: string | null;
   businessAddress: string | null;
+  businessPhone: string | null;
   todayIso: string;
 };
 
@@ -30,8 +32,10 @@ export function InvoiceEditor({
   invoice,
   defaultNumber,
   businessName,
+  businessContactName,
   businessEmail,
   businessAddress,
+  businessPhone,
   todayIso,
 }: Props) {
   const [rows, setRows] = useState<Row[]>(
@@ -249,8 +253,10 @@ export function InvoiceEditor({
       {preview ? (
         <InvoicePaper
           businessName={businessName}
+          businessContactName={businessContactName}
           businessEmail={businessEmail}
           businessAddress={businessAddress}
+          businessPhone={businessPhone}
           invoiceNumber={number || null}
           issuedOn={issuedOn}
           dueOn={dueOn || null}

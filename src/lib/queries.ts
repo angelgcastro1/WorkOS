@@ -145,7 +145,7 @@ export async function getProfile(): Promise<Profile | null> {
 
   const { data } = await supabase
     .from("profiles")
-    .select("id, name, role, business_name, business_email, business_address")
+    .select("id, name, role, business_name, business_contact_name, business_email, business_address, business_phone")
     .eq("id", user.id)
     .maybeSingle();
   return {
@@ -153,8 +153,10 @@ export async function getProfile(): Promise<Profile | null> {
     name: data?.name ?? user.email?.split("@")[0] ?? "You",
     role: data?.role ?? "Member",
     businessName: data?.business_name ?? null,
+    businessContactName: data?.business_contact_name ?? null,
     businessEmail: data?.business_email ?? user.email ?? null,
     businessAddress: data?.business_address ?? null,
+    businessPhone: data?.business_phone ?? null,
   };
 }
 

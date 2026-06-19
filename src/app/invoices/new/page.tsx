@@ -18,8 +18,10 @@ export default async function NewInvoicePage() {
         clients={clients}
         defaultNumber={defaultNumber}
         businessName={profile?.businessName || profile?.name || null}
+        businessContactName={profile?.businessContactName ?? null}
         businessEmail={profile?.businessEmail ?? null}
         businessAddress={profile?.businessAddress ?? null}
+        businessPhone={profile?.businessPhone ?? null}
         todayIso={todayIso}
       />
     </div>

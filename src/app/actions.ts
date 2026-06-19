@@ -383,8 +383,10 @@ export async function updateBusinessInfo(formData: FormData) {
     .from("profiles")
     .update({
       business_name: str(formData.get("business_name")),
+      business_contact_name: str(formData.get("business_contact_name")),
       business_email: str(formData.get("business_email")),
       business_address: str(formData.get("business_address")),
+      business_phone: str(formData.get("business_phone")),
     })
     .eq("id", user.id);
   revalidatePath("/", "layout");
