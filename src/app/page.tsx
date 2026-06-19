@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import { ListTodo, Folder, Flag, DollarSign, Send, Calendar, FileText, Check, Sparkles, Bell } from "lucide-react";
 import {
   Card,
@@ -22,7 +23,7 @@ type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foo
 
 export default async function DashboardPage() {
   const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
-  const { projects, tasks, notes, contacts, reminders } = workspace;
+  const { projects, tasks, notes, contacts, reminders, events } = workspace;
   const isEmpty = projects.length === 0 && tasks.length === 0 && notes.length === 0 && contacts.length === 0;
 
   if (isEmpty) {
@@ -74,6 +75,23 @@ export default async function DashboardPage() {
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
   const upcomingReminders = openReminders.slice(0, 4);
   const overdueReminders = openReminders.filter((r) => new Date(r.dueAt).getTime() < nowMs).length;
+
+  const todayIso = new Date(nowMs).toISOString().slice(0, 10);
+  const eventOccursOn = (ev: (typeof events)[number], iso: string) => {
+    if (iso < ev.date) return false;
+    if (ev.repeatRule === "daily") return true;
+    if (ev.repeatRule === "weekly") return new Date(iso).getUTCDay() === new Date(ev.date).getUTCDay();
+    if (ev.repeatRule === "monthly") return iso.slice(8, 10) === ev.date.slice(8, 10);
+    return iso === ev.date;
+  };
+  const weekSchedule: { iso: string; ev: (typeof events)[number] }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const iso = new Date(nowMs + i * 86400000).toISOString().slice(0, 10);
+    for (const ev of events) if (eventOccursOn(ev, iso)) weekSchedule.push({ iso, ev });
+  }
+  weekSchedule.sort((a, b) => (a.iso === b.iso ? (a.ev.startTime ?? "").localeCompare(b.ev.startTime ?? "") : a.iso.localeCompare(b.iso)));
+  const weekItems = weekSchedule.slice(0, 6);
+  const todaysMeetings = weekSchedule.filter((w) => w.iso === todayIso).length;
 
   return (
     <div className="space-y-6">
@@ -196,6 +214,43 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="animate-fade-up">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" /> This week
+          </CardTitle>
+          <Link href="/calendar" className="text-xs text-primary transition hover:underline">
+            {todaysMeetings > 0 ? `${todaysMeetings} today · ` : ""}Open calendar
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {weekItems.length === 0 ? (
+            <p className="py-3 text-center text-sm text-muted-foreground">
+              Nothing scheduled.{" "}
+              <Link href="/calendar" className="text-primary hover:underline">
+                Add an event
+              </Link>
+              .
+            </p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {weekItems.map(({ iso, ev }) => (
+                <div key={`${ev.id}-${iso}`} className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <div className="w-12 shrink-0 text-center">
+                    <p className="text-[10px] uppercase text-muted-foreground">{new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" })}</p>
+                    <p className="text-base font-bold tabular-nums leading-none">{Number(iso.slice(8, 10))}</p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{ev.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{ev.startTime ? `${ev.startTime.slice(0, 5)} · ` : ""}{ev.type.replace("_", " ")}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 md:grid-cols-3">
         <Card className="animate-fade-up">

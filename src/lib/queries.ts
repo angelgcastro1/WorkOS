@@ -11,6 +11,9 @@ import type {
   Invoice,
   TimeEntry,
   Client,
+  CalendarEvent,
+  EventType,
+  RepeatRule,
   LineItem,
   Profile,
   ProjectStatus,
@@ -118,6 +121,21 @@ interface ClientRow {
   phone: string | null;
   address: string | null;
 }
+interface EventRow {
+  id: string;
+  title: string;
+  type: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  notes: string | null;
+  meeting_link: string | null;
+  reminder_minutes: number | null;
+  reminder_channel: string | null;
+  repeat_rule: string | null;
+}
 interface RawLineItem {
   description?: unknown;
   quantity?: unknown;
@@ -162,7 +180,7 @@ export async function getProfile(): Promise<Profile | null> {
 
 export async function getWorkspace(): Promise<Workspace> {
   const supabase = await createClient();
-  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes] = await Promise.all([
+  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes, evRes] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: true }),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("notes").select("*").order("date", { ascending: false }),
@@ -173,6 +191,7 @@ export async function getWorkspace(): Promise<Workspace> {
     supabase.from("invoices").select("*").order("issued_on", { ascending: false }),
     supabase.from("time_entries").select("*").order("entry_date", { ascending: false }),
     supabase.from("clients").select("*").order("name", { ascending: true }),
+    supabase.from("events").select("*").order("event_date", { ascending: true }),
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];
@@ -185,6 +204,7 @@ export async function getWorkspace(): Promise<Workspace> {
   const invoiceRows = (invRes.data ?? []) as InvoiceRow[];
   const timeEntryRows = (teRes.data ?? []) as TimeEntryRow[];
   const clientRows = (clRes.data ?? []) as ClientRow[];
+  const eventRows = (evRes.data ?? []) as EventRow[];
 
   const projectName = new Map<string, string>(projectRows.map((p) => [p.id, p.name]));
 
@@ -311,5 +331,21 @@ export async function getWorkspace(): Promise<Workspace> {
     address: c.address,
   }));
 
-  return { projects, tasks, notes, contacts, reminders, applications, invoices, timeEntries, clients };
+  const events: CalendarEvent[] = eventRows.map((e) => ({
+    id: e.id,
+    title: e.title,
+    type: e.type as EventType,
+    date: e.event_date,
+    startTime: e.start_time,
+    endTime: e.end_time,
+    clientId: e.client_id,
+    projectId: e.project_id,
+    notes: e.notes,
+    meetingLink: e.meeting_link,
+    reminderMinutes: e.reminder_minutes,
+    reminderChannel: e.reminder_channel ?? "both",
+    repeatRule: (e.repeat_rule ?? "none") as RepeatRule,
+  }));
+
+  return { projects, tasks, notes, contacts, reminders, applications, invoices, timeEntries, clients, events };
 }

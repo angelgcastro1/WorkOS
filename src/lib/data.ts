@@ -137,6 +137,25 @@ export interface TimeEntry {
   entryDate: string | null;
 }
 
+export type EventType = "meeting" | "deadline" | "task" | "reminder" | "follow_up";
+export type RepeatRule = "none" | "daily" | "weekly" | "monthly";
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: EventType;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  clientId: string | null;
+  projectId: string | null;
+  notes: string | null;
+  meetingLink: string | null;
+  reminderMinutes: number | null;
+  reminderChannel: string;
+  repeatRule: RepeatRule;
+}
+
 export interface Workspace {
   projects: Project[];
   tasks: Task[];
@@ -147,4 +166,5 @@ export interface Workspace {
   invoices: Invoice[];
   timeEntries: TimeEntry[];
   clients: Client[];
+  events: CalendarEvent[];
 }

@@ -392,6 +392,78 @@ export async function updateBusinessInfo(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function createEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const rm = str(formData.get("reminder_minutes"));
+  await supabase.from("events").insert({
+    user_id: user.id,
+    title: str(formData.get("title")) || "Untitled event",
+    type: str(formData.get("type")) || "meeting",
+    event_date: str(formData.get("event_date")) || new Date().toISOString().slice(0, 10),
+    start_time: str(formData.get("start_time")) || null,
+    end_time: str(formData.get("end_time")) || null,
+    client_id: str(formData.get("client_id")) || null,
+    project_id: str(formData.get("project_id")) || null,
+    notes: str(formData.get("notes")) || null,
+    meeting_link: str(formData.get("meeting_link")) || null,
+    reminder_minutes: rm === "" ? null : Number(rm),
+    reminder_channel: str(formData.get("reminder_channel")) || "both",
+    repeat_rule: str(formData.get("repeat_rule")) || "none",
+    reminder_at: str(formData.get("reminder_at")) || null,
+  });
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function updateEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const rm = str(formData.get("reminder_minutes"));
+  await supabase
+    .from("events")
+    .update({
+      title: str(formData.get("title")) || "Untitled event",
+      type: str(formData.get("type")) || "meeting",
+      event_date: str(formData.get("event_date")) || new Date().toISOString().slice(0, 10),
+      start_time: str(formData.get("start_time")) || null,
+      end_time: str(formData.get("end_time")) || null,
+      client_id: str(formData.get("client_id")) || null,
+      project_id: str(formData.get("project_id")) || null,
+      notes: str(formData.get("notes")) || null,
+      meeting_link: str(formData.get("meeting_link")) || null,
+      reminder_minutes: rm === "" ? null : Number(rm),
+      reminder_channel: str(formData.get("reminder_channel")) || "both",
+      repeat_rule: str(formData.get("repeat_rule")) || "none",
+      reminder_at: str(formData.get("reminder_at")) || null,
+      reminded_at: null,
+    })
+    .eq("id", id);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function deleteEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  await supabase.from("events").delete().eq("id", id);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
 export async function seedSampleData() {
   const supabase = await createClient();
   await supabase.rpc("seed_sample_data");

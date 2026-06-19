@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-type DueReminder = { id: string; title: string };
+type DueItem = { id: string; title: string };
 
 export function ReminderAlerts() {
-  const [toasts, setToasts] = useState<DueReminder[]>([]);
+  const [toasts, setToasts] = useState<DueItem[]>([]);
   const alerted = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -17,23 +17,40 @@ export function ReminderAlerts() {
     }
     const supabase = createClient();
 
-    async function check() {
-      const nowIso = new Date().toISOString();
-      const { data } = await supabase.from("reminders").select("id, title").eq("done", false).lte("due_at", nowIso);
-      const due = (data ?? []) as DueReminder[];
-      const fresh = due.filter((r) => !alerted.current.has(r.id));
+    function notify(items: DueItem[]) {
+      const fresh = items.filter((i) => !alerted.current.has(i.id));
       if (fresh.length === 0) return;
-      for (const r of fresh) {
-        alerted.current.add(r.id);
+      for (const i of fresh) {
+        alerted.current.add(i.id);
         if ("Notification" in window && Notification.permission === "granted") {
           try {
-            new Notification("WorkCham reminder", { body: r.title });
+            new Notification("WorkCham reminder", { body: i.title });
           } catch {
             // notifications may be blocked; the in-app toast still shows
           }
         }
       }
       setToasts((prev) => [...prev, ...fresh]);
+    }
+
+    async function check() {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const dayAgoIso = new Date(now.getTime() - 86400000).toISOString();
+
+      const { data: remData } = await supabase.from("reminders").select("id, title").eq("done", false).lte("due_at", nowIso);
+      const rems = (remData ?? []) as { id: string; title: string }[];
+      notify(rems.map((r) => ({ id: `rem:${r.id}`, title: r.title })));
+
+      const { data: evData } = await supabase
+        .from("events")
+        .select("id, title, start_time, reminder_at, reminder_channel")
+        .not("reminder_at", "is", null)
+        .in("reminder_channel", ["both", "in_app"])
+        .lte("reminder_at", nowIso)
+        .gte("reminder_at", dayAgoIso);
+      const evs = (evData ?? []) as { id: string; title: string; start_time: string | null }[];
+      notify(evs.map((e) => ({ id: `ev:${e.id}`, title: e.start_time ? `${e.title} · ${e.start_time.slice(0, 5)}` : e.title })));
     }
 
     check();
