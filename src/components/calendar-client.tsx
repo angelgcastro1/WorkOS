@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Clock, Repeat, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Pencil, ExternalLink, Clock, Repeat, Bell } from "lucide-react";
 import type { CalendarEvent, Client, Project, Invoice, Reminder, Task, EventType } from "@/lib/data";
 import { createEvent, updateEvent, deleteEvent } from "@/app/actions";
-import { cn } from "@/lib/utils";
+import { cn, formatMoney, formatDate } from "@/lib/utils";
 
 type View = "month" | "week" | "day" | "agenda";
 
@@ -26,10 +26,15 @@ type DayItem = {
   kind: "event" | "invoice" | "deadline" | "reminder" | "task";
   title: string;
   time: string | null;
-  event?: CalendarEvent;
-  href?: string;
   color: string;
+  event?: CalendarEvent;
+  project?: Project;
+  invoice?: Invoice;
+  reminder?: Reminder;
+  task?: Task;
 };
+
+type Hover = { item: DayItem; x: number; y: number };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -48,6 +53,11 @@ const TYPE_LABEL: Record<EventType, string> = {
   reminder: "Reminder",
   follow_up: "Follow-up",
 };
+
+const INVOICE_COLOR = "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+const DEADLINE_COLOR = "bg-rose-500/15 text-rose-300 border-rose-500/30";
+const REMINDER_COLOR = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+const TASK_COLOR = "bg-sky-500/15 text-sky-300 border-sky-500/30";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -98,6 +108,16 @@ function fmtTime(t: string | null) {
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   return `${h12}:${m} ${ap}`;
 }
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+}
+function reminderLabel(min: number | null) {
+  if (min == null) return "None";
+  if (min === 0) return "At time of event";
+  if (min === 60) return "1 hour before";
+  if (min === 1440) return "1 day before";
+  return `${min} minutes before`;
+}
 
 function occursOn(ev: CalendarEvent, iso: string): boolean {
   if (iso < ev.date) return false;
@@ -115,70 +135,38 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
   const [view, setView] = useState<View>("month");
   const [cursor, setCursor] = useState<string>(todayIso);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [details, setDetails] = useState<DayItem | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
 
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
   function itemsForDate(iso: string): DayItem[] {
     const items: DayItem[] = [];
     for (const ev of events) {
       if (occursOn(ev, iso)) {
-        items.push({
-          key: `e-${ev.id}-${iso}`,
-          kind: "event",
-          title: ev.title,
-          time: ev.startTime,
-          event: ev,
-          color: TYPE_COLOR[ev.type] ?? TYPE_COLOR.meeting,
-        });
+        items.push({ key: `e-${ev.id}-${iso}`, kind: "event", title: ev.title, time: ev.startTime, color: TYPE_COLOR[ev.type] ?? TYPE_COLOR.meeting, event: ev });
       }
     }
     for (const inv of invoices) {
       if (inv.dueOn === iso && inv.status !== "paid") {
         const who = inv.clientId ? clientName.get(inv.clientId) : inv.client;
-        items.push({
-          key: `inv-${inv.id}`,
-          kind: "invoice",
-          title: `${inv.invoiceNumber ?? "Invoice"} due${who ? ` · ${who}` : ""}`,
-          time: null,
-          href: `/invoices/${inv.id}`,
-          color: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-        });
+        items.push({ key: `inv-${inv.id}`, kind: "invoice", title: `${inv.invoiceNumber ?? "Invoice"} due${who ? ` · ${who}` : ""}`, time: null, color: INVOICE_COLOR, invoice: inv });
       }
     }
     for (const p of projects) {
       if (p.deadline === iso && p.status !== "done") {
-        items.push({
-          key: `proj-${p.id}`,
-          kind: "deadline",
-          title: `${p.name} (deadline)`,
-          time: null,
-          href: "/projects",
-          color: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-        });
+        items.push({ key: `proj-${p.id}`, kind: "deadline", title: `${p.name} (deadline)`, time: null, color: DEADLINE_COLOR, project: p });
       }
     }
     for (const r of reminders) {
       if (!r.done && (r.dueAt ?? "").slice(0, 10) === iso) {
-        items.push({
-          key: `rem-${r.id}`,
-          kind: "reminder",
-          title: r.title,
-          time: r.dueAt.length > 10 ? r.dueAt.slice(11, 16) : null,
-          href: "/reminders",
-          color: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-        });
+        items.push({ key: `rem-${r.id}`, kind: "reminder", title: r.title, time: r.dueAt.length > 10 ? r.dueAt.slice(11, 16) : null, color: REMINDER_COLOR, reminder: r });
       }
     }
     for (const t of tasks) {
       if (t.due === iso && t.status !== "done") {
-        items.push({
-          key: `task-${t.id}`,
-          kind: "task",
-          title: t.title,
-          time: null,
-          href: "/tasks",
-          color: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-        });
+        items.push({ key: `task-${t.id}`, kind: "task", title: t.title, time: null, color: TASK_COLOR, task: t });
       }
     }
     items.sort((a, b) => {
@@ -206,9 +194,15 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
           ? weekdayLabel(cursor)
           : `Agenda from ${shortDate(cursor)}`;
 
+  const showHover = (item: DayItem, rect: DOMRect) => setHover({ item, x: rect.left, y: rect.bottom });
+  const hideHover = () => setHover(null);
+  const openDetails = (item: DayItem) => {
+    setHover(null);
+    setDetails(item);
+  };
+
   async function handleSave(formData: FormData) {
     if (editor?.mode === "edit" && editor.event) formData.set("id", editor.event.id);
-    // Precompute the reminder timestamp in the browser's local time so it fires correctly.
     const date = String(formData.get("event_date") ?? "");
     const rmStr = String(formData.get("reminder_minutes") ?? "");
     const startStr = String(formData.get("start_time") ?? "");
@@ -224,13 +218,15 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
     setEditor(null);
   }
 
-  async function handleDelete() {
-    if (!editor?.event) return;
+  async function handleDelete(id: string) {
     const fd = new FormData();
-    fd.set("id", editor.event.id);
+    fd.set("id", id);
     await deleteEvent(fd);
     setEditor(null);
+    setDetails(null);
   }
+
+  const viewProps = { cursor, todayIso, itemsForDate, onOpen: openDetails, onHover: showHover, onHoverOut: hideHover };
 
   return (
     <div className="space-y-4">
@@ -268,63 +264,74 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
         </div>
       </div>
 
-      {view === "month" ? <MonthView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} onMore={(d) => { setCursor(d); setView("agenda"); }} /> : null}
-      {view === "week" ? <WeekView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
-      {view === "day" ? <DayView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onAdd={(d) => setEditor({ mode: "new", date: d })} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
-      {view === "agenda" ? <AgendaView cursor={cursor} todayIso={todayIso} itemsForDate={itemsForDate} onEdit={(ev) => setEditor({ mode: "edit", date: ev.date, event: ev })} /> : null}
+      <p className="text-xs text-muted-foreground">Hover an item for a quick look · double-click for full details.</p>
 
-      {editor ? (
-        <EventEditor
-          editor={editor}
-          clients={clients}
-          projects={projects}
-          onClose={() => setEditor(null)}
-          onSave={handleSave}
+      {view === "month" ? <MonthView {...viewProps} onAdd={(d) => setEditor({ mode: "new", date: d })} onMore={(d) => { setCursor(d); setView("agenda"); }} /> : null}
+      {view === "week" ? <WeekView {...viewProps} onAdd={(d) => setEditor({ mode: "new", date: d })} /> : null}
+      {view === "day" ? <DayView {...viewProps} onAdd={(d) => setEditor({ mode: "new", date: d })} /> : null}
+      {view === "agenda" ? <AgendaView {...viewProps} /> : null}
+
+      {hover && !details && !editor ? <HoverPreview hover={hover} clientName={clientName} projectName={projectName} /> : null}
+
+      {details ? (
+        <DetailsModal
+          item={details}
+          clientName={clientName}
+          projectName={projectName}
+          onClose={() => setDetails(null)}
+          onEdit={(ev) => { setDetails(null); setEditor({ mode: "edit", date: ev.date, event: ev }); }}
           onDelete={handleDelete}
         />
+      ) : null}
+
+      {editor ? (
+        <EventEditor editor={editor} clients={clients} projects={projects} onClose={() => setEditor(null)} onSave={handleSave} onDelete={() => editor.event && handleDelete(editor.event.id)} />
       ) : null}
     </div>
   );
 }
 
-function Chip({ item, onEdit }: { item: DayItem; onEdit: (ev: CalendarEvent) => void }) {
-  const content = (
-    <span className="flex items-center gap-1 truncate">
-      {item.time ? <span className="tabular-nums opacity-80">{fmtTime(item.time)}</span> : null}
-      <span className="truncate">{item.title}</span>
-    </span>
-  );
-  if (item.event) {
-    return (
-      <button onClick={() => onEdit(item.event!)} className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.color)}>
-        {content}
-      </button>
-    );
-  }
+type ItemHandlers = {
+  onOpen: (item: DayItem) => void;
+  onHover: (item: DayItem, rect: DOMRect) => void;
+  onHoverOut: () => void;
+};
+
+function Chip({ item, onOpen, onHover, onHoverOut }: { item: DayItem } & ItemHandlers) {
   return (
-    <Link href={item.href ?? "#"} className={cn("block w-full truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight transition hover:brightness-125", item.color)}>
-      {content}
-    </Link>
+    <button
+      onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={onHoverOut}
+      onDoubleClick={() => onOpen(item)}
+      className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.color)}
+    >
+      <span className="flex items-center gap-1 truncate">
+        {item.time ? <span className="tabular-nums opacity-80">{fmtTime(item.time)}</span> : null}
+        <span className="truncate">{item.title}</span>
+      </span>
+    </button>
   );
 }
 
-function MonthView({
-  cursor,
-  todayIso,
-  itemsForDate,
-  onAdd,
-  onEdit,
-  onMore,
-}: {
-  cursor: string;
-  todayIso: string;
-  itemsForDate: (iso: string) => DayItem[];
-  onAdd: (iso: string) => void;
-  onEdit: (ev: CalendarEvent) => void;
-  onMore: (iso: string) => void;
-}) {
-  const { y, m } = parseIso(cursor);
-  const firstIso = `${y}-${pad2(m)}-01`;
+function Row({ item, onOpen, onHover, onHoverOut }: { item: DayItem } & ItemHandlers) {
+  const badge = item.event ? TYPE_LABEL[item.event.type] : cap(item.kind);
+  return (
+    <button
+      onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={onHoverOut}
+      onDoubleClick={() => onOpen(item)}
+      className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition hover:bg-muted"
+    >
+      <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">{item.time ? fmtTime(item.time) : "all day"}</span>
+      <span className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", item.color)}>{badge}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
+    </button>
+  );
+}
+
+function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onAdd, onMore }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void; onMore: (iso: string) => void } & ItemHandlers) {
+  const { m } = parseIso(cursor);
+  const firstIso = `${parseIso(cursor).y}-${pad2(m)}-01`;
   const gridStart = startOfWeekIso(firstIso);
   const cells: string[] = [];
   for (let i = 0; i < 42; i++) cells.push(addDaysIso(gridStart, i));
@@ -348,10 +355,7 @@ function MonthView({
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => onAdd(iso)}
-                  className={cn(
-                    "grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs transition hover:bg-muted",
-                    isToday ? "bg-primary font-bold text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/50",
-                  )}
+                  className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs transition hover:bg-muted", isToday ? "bg-primary font-bold text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/50")}
                   aria-label={`Add event on ${iso}`}
                 >
                   {parseIso(iso).d}
@@ -359,12 +363,10 @@ function MonthView({
               </div>
               <div className="mt-1 space-y-0.5">
                 {shown.map((it) => (
-                  <Chip key={it.key} item={it} onEdit={onEdit} />
+                  <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />
                 ))}
                 {extra > 0 ? (
-                  <button onClick={() => onMore(iso)} className="w-full rounded px-1.5 text-left text-[11px] text-muted-foreground transition hover:text-foreground">
-                    +{extra} more
-                  </button>
+                  <button onClick={() => onMore(iso)} className="w-full rounded px-1.5 text-left text-[11px] text-muted-foreground transition hover:text-foreground">+{extra} more</button>
                 ) : null}
               </div>
             </div>
@@ -375,19 +377,7 @@ function MonthView({
   );
 }
 
-function WeekView({
-  cursor,
-  todayIso,
-  itemsForDate,
-  onAdd,
-  onEdit,
-}: {
-  cursor: string;
-  todayIso: string;
-  itemsForDate: (iso: string) => DayItem[];
-  onAdd: (iso: string) => void;
-  onEdit: (ev: CalendarEvent) => void;
-}) {
+function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onAdd }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void } & ItemHandlers) {
   const start = startOfWeekIso(cursor);
   const days: string[] = [];
   for (let i = 0; i < 7; i++) days.push(addDaysIso(start, i));
@@ -401,15 +391,14 @@ function WeekView({
           <div key={iso} className={cn("rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs">
-                <span className="text-muted-foreground">{WEEKDAYS[weekdayOf(iso)]}</span>{" "}
-                <span className={cn("font-semibold", isToday && "text-primary")}>{parseIso(iso).d}</span>
+                <span className="text-muted-foreground">{WEEKDAYS[weekdayOf(iso)]}</span> <span className={cn("font-semibold", isToday && "text-primary")}>{parseIso(iso).d}</span>
               </div>
               <button onClick={() => onAdd(iso)} aria-label={`Add event on ${iso}`} className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground">
                 <Plus className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="space-y-1">
-              {items.length === 0 ? <p className="px-1 py-2 text-[11px] text-muted-foreground/60">—</p> : items.map((it) => <Chip key={it.key} item={it} onEdit={onEdit} />)}
+              {items.length === 0 ? <p className="px-1 py-2 text-[11px] text-muted-foreground/60">—</p> : items.map((it) => <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />)}
             </div>
           </div>
         );
@@ -418,17 +407,28 @@ function WeekView({
   );
 }
 
-function AgendaView({
-  cursor,
-  todayIso,
-  itemsForDate,
-  onEdit,
-}: {
-  cursor: string;
-  todayIso: string;
-  itemsForDate: (iso: string) => DayItem[];
-  onEdit: (ev: CalendarEvent) => void;
-}) {
+function DayView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onAdd }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void } & ItemHandlers) {
+  const items = itemsForDate(cursor);
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className={cn("text-sm font-semibold", cursor === todayIso && "text-primary")}>{cursor === todayIso ? "Today · " : ""}{weekdayLabel(cursor)}</p>
+        <button onClick={() => onAdd(cursor)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted">
+          <Plus className="h-4 w-4" /> Add
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Nothing scheduled this day.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map((it) => <Row key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgendaView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[] } & ItemHandlers) {
   const days: { iso: string; items: DayItem[] }[] = [];
   for (let i = 0; i < 45; i++) {
     const iso = addDaysIso(cursor, i);
@@ -446,20 +446,7 @@ function AgendaView({
         <div key={iso} className="rounded-xl border border-border p-3">
           <p className={cn("mb-2 text-sm font-semibold", iso === todayIso && "text-primary")}>{iso === todayIso ? "Today · " : ""}{weekdayLabel(iso)}</p>
           <div className="space-y-1.5">
-            {items.map((it) =>
-              it.event ? (
-                <button key={it.key} onClick={() => onEdit(it.event!)} className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left transition hover:bg-muted">
-                  <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{it.event ? TYPE_LABEL[it.event.type] : ""}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
-                  {it.time ? <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{fmtTime(it.time)}</span> : null}
-                </button>
-              ) : (
-                <Link key={it.key} href={it.href ?? "#"} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 transition hover:bg-muted">
-                  <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{it.kind}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
-                </Link>
-              ),
-            )}
+            {items.map((it) => <Row key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />)}
           </div>
         </div>
       ))}
@@ -467,49 +454,175 @@ function AgendaView({
   );
 }
 
-function DayView({
-  cursor,
-  todayIso,
-  itemsForDate,
-  onAdd,
-  onEdit,
-}: {
-  cursor: string;
-  todayIso: string;
-  itemsForDate: (iso: string) => DayItem[];
-  onAdd: (iso: string) => void;
-  onEdit: (ev: CalendarEvent) => void;
-}) {
-  const items = itemsForDate(cursor);
+function HoverPreview({ hover, clientName, projectName }: { hover: Hover; clientName: Map<string, string>; projectName: Map<string, string> }) {
+  const it = hover.item;
+  const left = typeof window !== "undefined" ? Math.min(hover.x, window.innerWidth - 276) : hover.x;
+  const top = hover.y + 6;
+  const ev = it.event;
+  const badge = ev ? TYPE_LABEL[ev.type] : cap(it.kind);
   return (
-    <div className="rounded-xl border border-border p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className={cn("text-sm font-semibold", cursor === todayIso && "text-primary")}>{cursor === todayIso ? "Today · " : ""}{weekdayLabel(cursor)}</p>
-        <button onClick={() => onAdd(cursor)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-muted">
-          <Plus className="h-4 w-4" /> Add
-        </button>
+    <div style={{ position: "fixed", left, top, zIndex: 60 }} className="pointer-events-none w-64 rounded-xl border border-border bg-card p-3 shadow-2xl">
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{badge}</span>
       </div>
-      {items.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Nothing scheduled this day.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {items.map((it) =>
-            it.event ? (
-              <button key={it.key} onClick={() => onEdit(it.event!)} className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition hover:bg-muted">
-                <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">{it.time ? fmtTime(it.time) : "all day"}</span>
-                <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{TYPE_LABEL[it.event.type]}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
-              </button>
-            ) : (
-              <Link key={it.key} href={it.href ?? "#"} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 transition hover:bg-muted">
-                <span className="w-16 shrink-0 text-xs text-muted-foreground">{it.time ? fmtTime(it.time) : "—"}</span>
-                <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", it.color)}>{it.kind}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{it.title}</span>
-              </Link>
-            ),
-          )}
+      <p className="text-sm font-semibold leading-tight">{it.event?.title ?? it.title}</p>
+      <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+        {ev ? (
+          <>
+            <p>{weekdayLabel(ev.date)}{ev.startTime ? ` · ${fmtTime(ev.startTime)}${ev.endTime ? `–${fmtTime(ev.endTime)}` : ""}` : ""}</p>
+            {ev.clientId && clientName.get(ev.clientId) ? <p>Client: {clientName.get(ev.clientId)}</p> : null}
+            {ev.projectId && projectName.get(ev.projectId) ? <p>Project: {projectName.get(ev.projectId)}</p> : null}
+            {ev.repeatRule !== "none" ? <p>Repeats {ev.repeatRule}</p> : null}
+            {ev.notes ? <p className="line-clamp-2">{ev.notes}</p> : null}
+          </>
+        ) : it.invoice ? (
+          <>
+            <p>Amount: {formatMoney(it.invoice.amount)}</p>
+            <p>Status: {cap(it.invoice.status)}</p>
+            {it.invoice.dueOn ? <p>Due {formatDate(it.invoice.dueOn)}</p> : null}
+          </>
+        ) : it.project ? (
+          <>
+            <p>Status: {cap(it.project.status)} · {cap(it.project.priority)}</p>
+            <p>Progress: {it.project.tasksDone}/{it.project.tasksTotal} tasks</p>
+            {it.project.deadline ? <p>Deadline {formatDate(it.project.deadline)}</p> : null}
+          </>
+        ) : it.reminder ? (
+          <>
+            <p>Due {formatDate(it.reminder.dueAt.slice(0, 10))}{it.reminder.dueAt.length > 10 ? ` · ${fmtTime(it.reminder.dueAt.slice(11, 16))}` : ""}</p>
+            {it.reminder.note ? <p className="line-clamp-2">{it.reminder.note}</p> : null}
+          </>
+        ) : it.task ? (
+          <>
+            <p>{cap(it.task.status)} · {cap(it.task.priority)}</p>
+            {it.task.project ? <p>Project: {it.task.project}</p> : null}
+            {it.task.due ? <p>Due {formatDate(it.task.due)}</p> : null}
+          </>
+        ) : null}
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground/70">Double-click for full details</p>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5">
+      <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="min-w-0 flex-1 text-right text-sm">{value}</span>
+    </div>
+  );
+}
+
+function DetailsModal({
+  item,
+  clientName,
+  projectName,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  item: DayItem;
+  clientName: Map<string, string>;
+  projectName: Map<string, string>;
+  onClose: () => void;
+  onEdit: (ev: CalendarEvent) => void;
+  onDelete: (id: string) => void;
+}) {
+  const ev = item.event;
+  let openHref = "";
+  let title = item.title;
+  if (ev) title = ev.title;
+  else if (item.invoice) openHref = `/invoices/${item.invoice.id}`;
+  else if (item.project) openHref = "/projects";
+  else if (item.reminder) openHref = "/reminders";
+  else if (item.task) openHref = "/tasks";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="mt-12 w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className={cn("rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", item.color)}>{ev ? TYPE_LABEL[ev.type] : cap(item.kind)}</span>
+            <h3 className="mt-1.5 text-lg font-bold leading-tight">{title}</h3>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="text-muted-foreground/70 transition hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      )}
+
+        <div className="divide-y divide-border">
+          {ev ? (
+            <>
+              <DetailRow label="Date" value={weekdayLabel(ev.date)} />
+              {ev.startTime ? <DetailRow label="Time" value={`${fmtTime(ev.startTime)}${ev.endTime ? `–${fmtTime(ev.endTime)}` : ""}`} /> : null}
+              {ev.clientId && clientName.get(ev.clientId) ? <DetailRow label="Client" value={clientName.get(ev.clientId)!} /> : null}
+              {ev.projectId && projectName.get(ev.projectId) ? <DetailRow label="Project" value={projectName.get(ev.projectId)!} /> : null}
+              {ev.repeatRule !== "none" ? <DetailRow label="Repeats" value={cap(ev.repeatRule)} /> : null}
+              <DetailRow label="Reminder" value={`${reminderLabel(ev.reminderMinutes)}${ev.reminderMinutes != null ? ` · ${cap(ev.reminderChannel.replace("_", "-"))}` : ""}`} />
+              {ev.notes ? <DetailRow label="Notes" value={ev.notes} /> : null}
+              {ev.attendees ? <DetailRow label="Attendees" value={ev.attendees} /> : null}
+              {ev.agenda ? <DetailRow label="Agenda" value={ev.agenda} /> : null}
+              {ev.actionItems ? <DetailRow label="Actions" value={ev.actionItems} /> : null}
+              {ev.meetingLink ? (
+                <div className="py-2">
+                  <a href={ev.meetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                    <ExternalLink className="h-3.5 w-3.5" /> Join meeting
+                  </a>
+                </div>
+              ) : null}
+            </>
+          ) : item.invoice ? (
+            <>
+              <DetailRow label="Amount" value={formatMoney(item.invoice.amount)} />
+              <DetailRow label="Status" value={cap(item.invoice.status)} />
+              {item.invoice.clientId && clientName.get(item.invoice.clientId) ? <DetailRow label="Client" value={clientName.get(item.invoice.clientId)!} /> : item.invoice.client ? <DetailRow label="Client" value={item.invoice.client} /> : null}
+              {item.invoice.issuedOn ? <DetailRow label="Issued" value={formatDate(item.invoice.issuedOn)} /> : null}
+              {item.invoice.dueOn ? <DetailRow label="Due" value={formatDate(item.invoice.dueOn)} /> : null}
+            </>
+          ) : item.project ? (
+            <>
+              <DetailRow label="Status" value={cap(item.project.status)} />
+              <DetailRow label="Priority" value={cap(item.project.priority)} />
+              {item.project.category ? <DetailRow label="Category" value={item.project.category} /> : null}
+              {item.project.client ? <DetailRow label="Client" value={item.project.client} /> : null}
+              <DetailRow label="Progress" value={`${item.project.tasksDone}/${item.project.tasksTotal} tasks (${item.project.progress}%)`} />
+              {item.project.deadline ? <DetailRow label="Deadline" value={formatDate(item.project.deadline)} /> : null}
+              {item.project.note ? <DetailRow label="Note" value={item.project.note} /> : null}
+            </>
+          ) : item.reminder ? (
+            <>
+              <DetailRow label="Due" value={`${formatDate(item.reminder.dueAt.slice(0, 10))}${item.reminder.dueAt.length > 10 ? ` · ${fmtTime(item.reminder.dueAt.slice(11, 16))}` : ""}`} />
+              {item.reminder.note ? <DetailRow label="Note" value={item.reminder.note} /> : null}
+            </>
+          ) : item.task ? (
+            <>
+              <DetailRow label="Status" value={cap(item.task.status)} />
+              <DetailRow label="Priority" value={cap(item.task.priority)} />
+              {item.task.project ? <DetailRow label="Project" value={item.task.project} /> : null}
+              {item.task.due ? <DetailRow label="Due" value={formatDate(item.task.due)} /> : null}
+            </>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          {ev ? (
+            <>
+              <button onClick={() => onEdit(ev)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110">
+                <Pencil className="h-4 w-4" /> Edit
+              </button>
+              <button onClick={() => onDelete(ev.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/10">
+                <Trash2 className="h-4 w-4" /> Delete
+              </button>
+            </>
+          ) : openHref ? (
+            <Link href={openHref} onClick={onClose} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110">
+              <ExternalLink className="h-4 w-4" /> Open
+            </Link>
+          ) : null}
+          <button onClick={onClose} className="ml-auto rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-muted">Close</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -527,7 +640,7 @@ function EventEditor({
   projects: Project[];
   onClose: () => void;
   onSave: (formData: FormData) => Promise<void>;
-  onDelete: () => Promise<void>;
+  onDelete: () => void;
 }) {
   const ev = editor.event;
   return (
