@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus, Trash2, X, Pencil, ExternalLink, Clock, Repeat, Bell } from "lucide-react";
 import type { CalendarEvent, Client, Project, Invoice, Reminder, Task, EventType } from "@/lib/data";
-import { createEvent, updateEvent, deleteEvent } from "@/app/actions";
+import { createEvent, updateEvent, deleteEvent, moveEvent } from "@/app/actions";
 import { cn, formatMoney, formatDate } from "@/lib/utils";
 
 type View = "month" | "week" | "day" | "agenda";
@@ -137,13 +137,17 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [details, setDetails] = useState<DayItem | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  const [dragEventId, setDragEventId] = useState<string | null>(null);
+  const [moved, setMoved] = useState<Record<string, string>>({});
 
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
+  const effEvents = Object.keys(moved).length ? events.map((e) => (moved[e.id] ? { ...e, date: moved[e.id] } : e)) : events;
+
   function itemsForDate(iso: string): DayItem[] {
     const items: DayItem[] = [];
-    for (const ev of events) {
+    for (const ev of effEvents) {
       if (occursOn(ev, iso)) {
         items.push({ key: `e-${ev.id}-${iso}`, kind: "event", title: ev.title, time: ev.startTime, color: TYPE_COLOR[ev.type] ?? TYPE_COLOR.meeting, event: ev });
       }
@@ -201,6 +205,17 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
     setDetails(item);
   };
 
+  function onDropDate(iso: string) {
+    if (!dragEventId) return;
+    const id = dragEventId;
+    setMoved((p) => ({ ...p, [id]: iso }));
+    setDragEventId(null);
+    const fd = new FormData();
+    fd.set("id", id);
+    fd.set("event_date", iso);
+    void moveEvent(fd);
+  }
+
   async function handleSave(formData: FormData) {
     if (editor?.mode === "edit" && editor.event) formData.set("id", editor.event.id);
     const date = String(formData.get("event_date") ?? "");
@@ -226,7 +241,7 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
     setDetails(null);
   }
 
-  const viewProps = { cursor, todayIso, itemsForDate, onOpen: openDetails, onHover: showHover, onHoverOut: hideHover };
+  const viewProps = { cursor, todayIso, itemsForDate, onOpen: openDetails, onHover: showHover, onHoverOut: hideHover, onDragStartEvent: (id: string) => setDragEventId(id), onDropDate };
 
   return (
     <div className="space-y-4">
@@ -295,15 +310,18 @@ type ItemHandlers = {
   onOpen: (item: DayItem) => void;
   onHover: (item: DayItem, rect: DOMRect) => void;
   onHoverOut: () => void;
+  onDragStartEvent?: (id: string) => void;
 };
 
-function Chip({ item, onOpen, onHover, onHoverOut }: { item: DayItem } & ItemHandlers) {
+function Chip({ item, onOpen, onHover, onHoverOut, onDragStartEvent }: { item: DayItem } & ItemHandlers) {
   return (
     <button
+      draggable={Boolean(item.event)}
+      onDragStart={item.event ? () => onDragStartEvent?.(item.event!.id) : undefined}
       onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHoverOut}
       onDoubleClick={() => onOpen(item)}
-      className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.color)}
+      className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.event && "cursor-grab active:cursor-grabbing", item.color)}
     >
       <span className="flex items-center gap-1 truncate">
         {item.time ? <span className="tabular-nums opacity-80">{fmtTime(item.time)}</span> : null}
@@ -329,7 +347,7 @@ function Row({ item, onOpen, onHover, onHoverOut }: { item: DayItem } & ItemHand
   );
 }
 
-function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onAdd, onMore }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void; onMore: (iso: string) => void } & ItemHandlers) {
+function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onDragStartEvent, onAdd, onMore, onDropDate }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void; onMore: (iso: string) => void; onDropDate: (iso: string) => void } & ItemHandlers) {
   const { m } = parseIso(cursor);
   const firstIso = `${parseIso(cursor).y}-${pad2(m)}-01`;
   const gridStart = startOfWeekIso(firstIso);
@@ -351,7 +369,7 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
           const shown = items.slice(0, 3);
           const extra = items.length - shown.length;
           return (
-            <div key={iso} className={cn("min-h-24 border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/20")}>
+            <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("min-h-24 border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/20")}>
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => onAdd(iso)}
@@ -363,7 +381,7 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
               </div>
               <div className="mt-1 space-y-0.5">
                 {shown.map((it) => (
-                  <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />
+                  <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} onDragStartEvent={onDragStartEvent} />
                 ))}
                 {extra > 0 ? (
                   <button onClick={() => onMore(iso)} className="w-full rounded px-1.5 text-left text-[11px] text-muted-foreground transition hover:text-foreground">+{extra} more</button>
@@ -377,7 +395,7 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
   );
 }
 
-function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onAdd }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void } & ItemHandlers) {
+function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut, onDragStartEvent, onAdd, onDropDate }: { cursor: string; todayIso: string; itemsForDate: (iso: string) => DayItem[]; onAdd: (iso: string) => void; onDropDate: (iso: string) => void } & ItemHandlers) {
   const start = startOfWeekIso(cursor);
   const days: string[] = [];
   for (let i = 0; i < 7; i++) days.push(addDaysIso(start, i));
@@ -388,7 +406,7 @@ function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut,
         const isToday = iso === todayIso;
         const items = itemsForDate(iso);
         return (
-          <div key={iso} className={cn("rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
+          <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs">
                 <span className="text-muted-foreground">{WEEKDAYS[weekdayOf(iso)]}</span> <span className={cn("font-semibold", isToday && "text-primary")}>{parseIso(iso).d}</span>
@@ -398,7 +416,7 @@ function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut,
               </button>
             </div>
             <div className="space-y-1">
-              {items.length === 0 ? <p className="px-1 py-2 text-[11px] text-muted-foreground/60">—</p> : items.map((it) => <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} />)}
+              {items.length === 0 ? <p className="px-1 py-2 text-[11px] text-muted-foreground/60">—</p> : items.map((it) => <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} onDragStartEvent={onDragStartEvent} />)}
             </div>
           </div>
         );

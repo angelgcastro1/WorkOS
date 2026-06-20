@@ -33,6 +33,29 @@ function parseLineItems(json: string | null): { description: string; quantity: n
   }
 }
 
+function advanceDate(iso: string, rule: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (rule === "daily") dt.setUTCDate(dt.getUTCDate() + 1);
+  else if (rule === "weekly") dt.setUTCDate(dt.getUTCDate() + 7);
+  else if (rule === "monthly") dt.setUTCMonth(dt.getUTCMonth() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+async function spawnNextRecurringTask(id: string) {
+  const supabase = await createClient();
+  const { data: t } = await supabase.from("tasks").select("title, priority, project_id, due, repeat_rule").eq("id", id).maybeSingle();
+  if (!t || !t.repeat_rule || t.repeat_rule === "none" || !t.due) return;
+  await supabase.from("tasks").insert({
+    title: t.title,
+    status: "todo",
+    priority: t.priority,
+    project_id: t.project_id,
+    due: advanceDate(t.due, t.repeat_rule),
+    repeat_rule: t.repeat_rule,
+  });
+}
+
 export async function createTask(formData: FormData) {
   const title = str(formData.get("title"));
   if (!title) return;
@@ -43,6 +66,7 @@ export async function createTask(formData: FormData) {
     priority: str(formData.get("priority")) ?? "medium",
     project_id: str(formData.get("project_id")),
     due: str(formData.get("due")),
+    repeat_rule: str(formData.get("repeat_rule")) || "none",
   });
   revalidatePath("/", "layout");
 }
@@ -50,12 +74,26 @@ export async function createTask(formData: FormData) {
 export async function toggleTask(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;
-  const done = str(formData.get("done")) === "true";
+  const wasDone = str(formData.get("done")) === "true";
   const supabase = await createClient();
   await supabase
     .from("tasks")
-    .update({ status: done ? "todo" : "done", completed_at: done ? null : today() })
+    .update({ status: wasDone ? "todo" : "done", completed_at: wasDone ? null : today() })
     .eq("id", id);
+  if (!wasDone) await spawnNextRecurringTask(id);
+  revalidatePath("/", "layout");
+}
+
+export async function setTaskStatus(formData: FormData) {
+  const id = str(formData.get("id"));
+  const status = str(formData.get("status"));
+  if (!id || !status) return;
+  const supabase = await createClient();
+  await supabase
+    .from("tasks")
+    .update({ status, completed_at: status === "done" ? today() : null })
+    .eq("id", id);
+  if (status === "done") await spawnNextRecurringTask(id);
   revalidatePath("/", "layout");
 }
 
@@ -466,6 +504,23 @@ export async function deleteEvent(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;
   await supabase.from("events").delete().eq("id", id);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function moveEvent(formData: FormData) {
+  const id = str(formData.get("id"));
+  const newDate = str(formData.get("event_date"));
+  if (!id || !newDate) return;
+  const supabase = await createClient();
+  const { data: ev } = await supabase.from("events").select("event_date, reminder_at").eq("id", id).maybeSingle();
+  let reminderAt: string | null = ev?.reminder_at ?? null;
+  if (ev?.event_date && ev?.reminder_at) {
+    const oldMs = new Date(`${ev.event_date}T00:00:00Z`).getTime();
+    const newMs = new Date(`${newDate}T00:00:00Z`).getTime();
+    reminderAt = new Date(new Date(ev.reminder_at).getTime() + (newMs - oldMs)).toISOString();
+  }
+  await supabase.from("events").update({ event_date: newDate, reminder_at: reminderAt, reminded_at: null }).eq("id", id);
   revalidatePath("/calendar");
   revalidatePath("/");
 }

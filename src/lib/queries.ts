@@ -43,6 +43,7 @@ interface TaskRow {
   due: string | null;
   completed_at: string | null;
   tags: string[] | null;
+  repeat_rule: string | null;
 }
 interface NoteRow {
   id: string;
@@ -222,6 +223,7 @@ export async function getWorkspace(): Promise<Workspace> {
     due: t.due,
     completedAt: t.completed_at,
     tags: t.tags ?? [],
+    repeatRule: (t.repeat_rule ?? "none") as RepeatRule,
   }));
 
   const projects: Project[] = projectRows.map((p) => {

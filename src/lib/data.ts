@@ -43,6 +43,7 @@ export interface Task {
   due: string | null;
   completedAt: string | null;
   tags: string[];
+  repeatRule: RepeatRule;
 }
 
 export interface Attachment {

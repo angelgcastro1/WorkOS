@@ -4,9 +4,10 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { createTask, createEvent, createNote } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
-type CmdItem = { id: string; label: string; sub?: string; href: string; group: string };
+type CmdItem = { id: string; label: string; sub?: string; href: string; group: string; create?: "task" | "event" | "note" };
 
 const GROUP_ORDER = ["Go to", "Create", "Tasks", "Projects", "Notes", "Clients", "Invoices", "Events", "Reminders"];
 
@@ -113,9 +114,17 @@ export function CommandPalette() {
     setActiveIndex(0);
   }
 
-  function go(it: CmdItem) {
+  async function go(it: CmdItem) {
+    if (it.create) {
+      const fd = new FormData();
+      fd.set("title", query.trim());
+      if (it.create === "event") fd.set("event_date", new Date().toISOString().slice(0, 10));
+      const fn = it.create === "task" ? createTask : it.create === "event" ? createEvent : createNote;
+      await fn(fd);
+    }
     close();
     router.push(it.href);
+    router.refresh();
   }
 
   if (!open) return null;
@@ -131,7 +140,15 @@ export function CommandPalette() {
     ...data.reminders.map((x) => ({ id: `r-${x.id}`, label: x.title, href: "/reminders", group: "Reminders" })),
   ];
 
-  const all = q ? [...NAV, ...CREATE, ...dyn] : [...NAV, ...CREATE];
+  const trimmed = query.trim();
+  const createGroup: CmdItem[] = trimmed
+    ? [
+        { id: "mk-task", label: `Create task “${trimmed}”`, href: "/tasks", group: "Create", create: "task" },
+        { id: "mk-event", label: `Create event “${trimmed}” today`, href: "/calendar", group: "Create", create: "event" },
+        { id: "mk-note", label: `Create note “${trimmed}”`, href: "/notes", group: "Create", create: "note" },
+      ]
+    : CREATE;
+  const all = q ? [...NAV, ...createGroup, ...dyn] : [...NAV, ...createGroup];
   const pool = all
     .filter((it) => !q || it.label.toLowerCase().includes(q) || (it.sub ? it.sub.toLowerCase().includes(q) : false))
     .sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group))
