@@ -19,6 +19,7 @@ import {
   Receipt,
   Timer,
   CalendarDays,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -30,6 +31,7 @@ import { signOut } from "@/app/actions";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/assistant", label: "Assistant", icon: Sparkles },
   { href: "/projects", label: "Projects", icon: Folder },
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/reminders", label: "Reminders", icon: Bell },
