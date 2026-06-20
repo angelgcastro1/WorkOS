@@ -22,11 +22,16 @@ const fieldClass =
 export function ProjectCard({ project }: { project: Project }) {
   const [editing, setEditing] = useState(false);
 
+  async function handleSave(formData: FormData) {
+    await updateProject(formData);
+    setEditing(false);
+  }
+
   if (editing) {
     return (
       <Card className="animate-fade-up">
         <CardContent className="space-y-2 p-5">
-          <form action={updateProject} className="space-y-2">
+          <form action={handleSave} className="space-y-2">
             <input type="hidden" name="id" value={project.id} />
             <input name="name" defaultValue={project.name} required placeholder="Project name" className={cn(fieldClass, "w-full font-medium")} />
             <div className="flex flex-wrap gap-2">
@@ -52,7 +57,6 @@ export function ProjectCard({ project }: { project: Project }) {
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="submit"
-                onClick={() => setEditing(false)}
                 className="rounded-lg bg-primary px-3.5 py-1.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
               >
                 Save

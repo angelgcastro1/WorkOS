@@ -13,11 +13,16 @@ const fieldClass =
 export function ClientCard({ client }: { client: Client }) {
   const [editing, setEditing] = useState(false);
 
+  async function handleSave(formData: FormData) {
+    await updateClient(formData);
+    setEditing(false);
+  }
+
   if (editing) {
     return (
       <Card>
         <CardContent className="space-y-2 p-5">
-          <form action={updateClient} className="space-y-2">
+          <form action={handleSave} className="space-y-2">
             <input type="hidden" name="id" value={client.id} />
             <input name="name" defaultValue={client.name} required placeholder="Name" className={fieldClass} />
             <input name="company" defaultValue={client.company ?? ""} placeholder="Company" className={fieldClass} />
@@ -27,7 +32,6 @@ export function ClientCard({ client }: { client: Client }) {
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="submit"
-                onClick={() => setEditing(false)}
                 className="rounded-lg bg-primary px-3.5 py-1.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
               >
                 Save

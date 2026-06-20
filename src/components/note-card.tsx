@@ -61,10 +61,15 @@ export function NoteCard({ note, projects, userId }: Props) {
     router.refresh();
   }
 
+  async function handleSave(formData: FormData) {
+    await updateNote(formData);
+    setEditing(false);
+  }
+
   if (editing) {
     return (
       <Card className="mb-4 break-inside-avoid p-4">
-        <form action={updateNote} className="space-y-2">
+        <form action={handleSave} className="space-y-2">
           <input type="hidden" name="id" value={note.id} />
           <input name="title" defaultValue={note.title} required className={fieldClass} placeholder="Title" />
           <div className="flex gap-2">
@@ -89,7 +94,6 @@ export function NoteCard({ note, projects, userId }: Props) {
           <div className="flex items-center gap-2 pt-1">
             <button
               type="submit"
-              onClick={() => setEditing(false)}
               className="rounded-lg bg-primary px-3.5 py-1.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
             >
               Save
