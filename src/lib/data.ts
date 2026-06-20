@@ -116,6 +116,7 @@ export interface LineItem {
 
 export interface Invoice {
   id: string;
+  publicToken: string;
   invoiceNumber: string | null;
   client: string | null;
   clientId: string | null;

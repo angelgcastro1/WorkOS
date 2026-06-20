@@ -94,6 +94,7 @@ interface ApplicationRow {
 }
 interface InvoiceRow {
   id: string;
+  public_token: string;
   invoice_number: string | null;
   client: string | null;
   client_id: string | null;
@@ -304,6 +305,7 @@ export async function getWorkspace(): Promise<Workspace> {
 
   const invoices: Invoice[] = invoiceRows.map((i) => ({
     id: i.id,
+    publicToken: i.public_token,
     invoiceNumber: i.invoice_number,
     client: i.client,
     clientId: i.client_id,

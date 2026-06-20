@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { getWorkspace, getProfile } from "@/lib/queries";
 import { PrintButton } from "@/components/print-button";
 import { InvoicePaper } from "@/components/invoice-paper";
+import { InvoiceShareButtons } from "@/components/invoice-share-buttons";
 
 export default async function InvoiceViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,6 +27,12 @@ export default async function InvoiceViewPage({ params }: { params: Promise<{ id
         >
           <Pencil className="h-4 w-4" /> Edit
         </Link>
+        <InvoiceShareButtons
+          token={invoice.publicToken}
+          invoiceNumber={invoice.invoiceNumber}
+          businessName={profile?.businessName || profile?.name || null}
+          clientEmail={client?.email ?? null}
+        />
         <PrintButton />
       </div>
 

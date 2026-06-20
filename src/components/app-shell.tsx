@@ -50,7 +50,7 @@ type Props = {
 
 export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
-  if (pathname === "/login") return <>{children}</>;
+  if (pathname === "/login" || pathname.startsWith("/invoice/")) return <>{children}</>;
 
   const initials = profile?.name?.trim()?.[0]?.toUpperCase() ?? "W";
 
