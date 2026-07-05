@@ -13,6 +13,7 @@ import type {
   Client,
   ClientStage,
   ClientNote,
+  IntakeSubmission,
   CalendarEvent,
   EventType,
   RepeatRule,
@@ -202,6 +203,29 @@ export async function getClientNotes(clientId: string): Promise<ClientNote[]> {
     clientId: n.client_id as string,
     body: (n.body ?? "") as string,
     createdAt: n.created_at as string,
+  }));
+}
+
+export async function getIntakeSubmissions(): Promise<IntakeSubmission[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("intake_submissions")
+    .select("id, name, email, phone, company, services, budget, timeline, details, source, status, client_id, created_at")
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((s) => ({
+    id: s.id as string,
+    name: (s.name ?? "") as string,
+    email: (s.email ?? null) as string | null,
+    phone: (s.phone ?? null) as string | null,
+    company: (s.company ?? null) as string | null,
+    services: Array.isArray(s.services) ? (s.services as string[]) : [],
+    budget: (s.budget ?? null) as string | null,
+    timeline: (s.timeline ?? null) as string | null,
+    details: (s.details ?? null) as string | null,
+    source: (s.source ?? null) as string | null,
+    status: (s.status ?? "new") as string,
+    clientId: (s.client_id ?? null) as string | null,
+    createdAt: s.created_at as string,
   }));
 }
 

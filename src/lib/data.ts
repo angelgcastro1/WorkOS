@@ -121,6 +121,22 @@ export interface ClientNote {
   createdAt: string;
 }
 
+export interface IntakeSubmission {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  services: string[];
+  budget: string | null;
+  timeline: string | null;
+  details: string | null;
+  source: string | null;
+  status: string;
+  clientId: string | null;
+  createdAt: string;
+}
+
 export interface LineItem {
   description: string;
   quantity: number;

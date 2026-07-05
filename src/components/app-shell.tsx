@@ -21,6 +21,7 @@ import {
   CalendarDays,
   Sparkles,
   Users,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -39,6 +40,7 @@ const nav = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/intake", label: "Intake", icon: Inbox },
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/time", label: "Time", icon: Timer },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
@@ -54,7 +56,7 @@ type Props = {
 
 export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
-  if (pathname === "/login" || pathname.startsWith("/invoice/")) return <>{children}</>;
+  if (pathname === "/login" || pathname.startsWith("/invoice/") || pathname.startsWith("/intake/form")) return <>{children}</>;
 
   const initials = profile?.name?.trim()?.[0]?.toUpperCase() ?? "W";
 
