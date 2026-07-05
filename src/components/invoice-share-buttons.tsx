@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 import { Mail, Link2, Check } from "lucide-react";
+import type { DocKind } from "@/lib/data";
 
-type Props = { token: string; invoiceNumber: string | null; businessName: string | null; clientEmail: string | null };
+type Props = {
+  token: string;
+  invoiceNumber: string | null;
+  businessName: string | null;
+  clientEmail: string | null;
+  kind?: DocKind;
+};
 
-export function InvoiceShareButtons({ token, invoiceNumber, businessName, clientEmail }: Props) {
+export function InvoiceShareButtons({ token, invoiceNumber, businessName, clientEmail, kind = "invoice" }: Props) {
   const [copied, setCopied] = useState(false);
+  const noun = kind === "quote" ? "quote" : "invoice";
 
   function link() {
     return `${window.location.origin}/invoice/${token}`;
@@ -21,9 +29,10 @@ export function InvoiceShareButtons({ token, invoiceNumber, businessName, client
 
   function email() {
     const url = link();
-    const subject = encodeURIComponent(`Invoice ${invoiceNumber ?? ""} from ${businessName ?? "us"}`.replace(/\s+/g, " ").trim());
+    const subject = encodeURIComponent(`${noun === "quote" ? "Quote" : "Invoice"} ${invoiceNumber ?? ""} from ${businessName ?? "us"}`.replace(/\s+/g, " ").trim());
+    const action = noun === "quote" ? "view it online" : "view and pay it online";
     const body = encodeURIComponent(
-      `Hi,\n\nHere's your invoice${invoiceNumber ? ` ${invoiceNumber}` : ""}. You can view and pay it online here:\n${url}\n\nThank you!\n${businessName ?? ""}`,
+      `Hi,\n\nHere's your ${noun}${invoiceNumber ? ` ${invoiceNumber}` : ""}. You can ${action} here:\n${url}\n\nThank you!\n${businessName ?? ""}`,
     );
     window.location.href = `mailto:${clientEmail ?? ""}?subject=${subject}&body=${body}`;
   }

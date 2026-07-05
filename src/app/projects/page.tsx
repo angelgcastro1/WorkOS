@@ -9,7 +9,7 @@ const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ProjectsPage() {
-  const { projects } = await getWorkspace();
+  const { projects, clients } = await getWorkspace();
   const active = projects.filter((p) => p.status === "active").length;
 
   return (
@@ -25,7 +25,18 @@ export default async function ProjectsPage() {
         <form action={createProject} className="flex flex-wrap items-center gap-2 p-3">
           <input name="name" required placeholder="New project…" className={cn(fieldClass, "min-w-50 flex-1")} />
           <input name="category" placeholder="Category" className={cn(fieldClass, "w-32")} />
-          <input name="client" placeholder="Client (optional)" className={cn(fieldClass, "w-36")} />
+          {clients.length > 0 ? (
+            <select name="client_id" defaultValue="" className={cn(fieldClass, "w-40")} aria-label="Client">
+              <option value="">Client (optional)</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input name="client" placeholder="Client (optional)" className={cn(fieldClass, "w-36")} />
+          )}
           <select name="status" defaultValue="planning" className={fieldClass} aria-label="Status">
             <option value="planning">Planning</option>
             <option value="active">Active</option>

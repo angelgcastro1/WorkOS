@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Trash2, Check, Users } from "lucide-react";
+import { Plus, Trash2, Check, Users, FileCheck2 } from "lucide-react";
 import type { InvoiceStatus } from "@/lib/data";
 import { getWorkspace } from "@/lib/queries";
 import { setInvoiceStatus, deleteInvoice } from "@/app/actions";
@@ -11,6 +11,8 @@ const STATUS_BADGE: Record<InvoiceStatus, string> = {
   sent: "bg-blue-500/15 text-blue-400",
   paid: "bg-emerald-500/15 text-emerald-400",
   overdue: "bg-red-500/15 text-red-400",
+  accepted: "bg-emerald-500/15 text-emerald-400",
+  declined: "bg-red-500/15 text-red-400",
 };
 
 function monthKey(): string {
@@ -19,7 +21,8 @@ function monthKey(): string {
 }
 
 export default async function InvoicesPage() {
-  const { invoices, clients } = await getWorkspace();
+  const { invoices: allDocs, clients } = await getWorkspace();
+  const invoices = allDocs.filter((i) => i.kind !== "quote");
   const ym = monthKey();
   const paidThisMonth = invoices.filter((i) => i.status === "paid" && (i.paidOn ?? "").slice(0, 7) === ym).reduce((s, i) => s + i.amount, 0);
   const outstanding = invoices.filter((i) => i.status === "sent" || i.status === "overdue").reduce((s, i) => s + i.amount, 0);
@@ -40,6 +43,12 @@ export default async function InvoicesPage() {
           <p className="text-sm text-muted-foreground">Create a clean invoice in seconds, then export a polished PDF.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/quotes"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium transition hover:bg-muted"
+          >
+            <FileCheck2 className="h-4 w-4" /> Quotes
+          </Link>
           <Link
             href="/clients"
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium transition hover:bg-muted"

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Plus, Trash2, Eye, ArrowLeft, Download } from "lucide-react";
-import type { Client, Invoice } from "@/lib/data";
+import type { Client, DocKind, Invoice } from "@/lib/data";
 import { createInvoice, updateInvoice } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui";
 import { InvoicePaper } from "@/components/invoice-paper";
@@ -25,6 +25,8 @@ type Props = {
   businessAddress: string | null;
   businessPhone: string | null;
   todayIso: string;
+  kind?: DocKind;
+  defaultClientId?: string;
 };
 
 export function InvoiceEditor({
@@ -37,7 +39,14 @@ export function InvoiceEditor({
   businessAddress,
   businessPhone,
   todayIso,
+  kind: kindProp,
+  defaultClientId,
 }: Props) {
+  const kind: DocKind = invoice?.kind ?? kindProp ?? "invoice";
+  const isQuote = kind === "quote";
+  const noun = isQuote ? "quote" : "invoice";
+  const Noun = isQuote ? "Quote" : "Invoice";
+  const backHref = isQuote ? "/quotes" : "/invoices";
   const [rows, setRows] = useState<Row[]>(
     invoice && invoice.lineItems.length > 0
       ? invoice.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, rate: li.rate }))
@@ -45,7 +54,7 @@ export function InvoiceEditor({
   );
   const [taxRate, setTaxRate] = useState<number>(invoice?.taxRate ?? 0);
   const [number, setNumber] = useState<string>(invoice?.invoiceNumber ?? defaultNumber);
-  const [clientId, setClientId] = useState<string>(invoice?.clientId ?? "");
+  const [clientId, setClientId] = useState<string>(invoice?.clientId ?? defaultClientId ?? "");
   const [status, setStatus] = useState<string>(invoice?.status ?? "draft");
   const [dueOn, setDueOn] = useState<string>(invoice?.dueOn ?? "");
   const [notes, setNotes] = useState<string>(invoice?.notes ?? "");
@@ -68,6 +77,7 @@ export function InvoiceEditor({
   return (
     <form action={action} className="space-y-4">
       {invoice ? <input type="hidden" name="id" value={invoice.id} /> : null}
+      <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="line_items" value={JSON.stringify(rows)} />
       <input type="hidden" name="tax_rate" value={String(taxRate)} />
 
@@ -76,7 +86,7 @@ export function InvoiceEditor({
           type="submit"
           className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110"
         >
-          Save invoice
+          Save {noun}
         </button>
         {preview ? (
           <>
@@ -104,7 +114,7 @@ export function InvoiceEditor({
             >
               <Eye className="h-4 w-4" /> Preview
             </button>
-            <Link href="/invoices" className="rounded-lg border border-border px-4 py-2 text-sm transition hover:bg-muted">
+            <Link href={backHref} className="rounded-lg border border-border px-4 py-2 text-sm transition hover:bg-muted">
               Cancel
             </Link>
           </>
@@ -115,7 +125,7 @@ export function InvoiceEditor({
         <Card>
           <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Invoice number</label>
+              <label className={labelClass}>{Noun} number</label>
               <input name="invoice_number" value={number} onChange={(e) => setNumber(e.target.value)} className={fieldClass} />
             </div>
             <div>
@@ -145,12 +155,21 @@ export function InvoiceEditor({
               <select name="status" value={status} onChange={(e) => setStatus(e.target.value)} className={fieldClass}>
                 <option value="draft">Draft</option>
                 <option value="sent">Sent</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
+                {isQuote ? (
+                  <>
+                    <option value="accepted">Accepted</option>
+                    <option value="declined">Declined</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="paid">Paid</option>
+                    <option value="overdue">Overdue</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Due date</label>
+              <label className={labelClass}>{isQuote ? "Valid until" : "Due date"}</label>
               <input name="due_on" type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} className={fieldClass} />
             </div>
           </CardContent>
@@ -269,6 +288,7 @@ export function InvoiceEditor({
           lineItems={rows}
           taxRate={taxRate}
           notes={notes || null}
+          kind={kind}
         />
       ) : null}
     </form>

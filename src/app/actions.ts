@@ -109,12 +109,19 @@ export async function createProject(formData: FormData) {
   const name = str(formData.get("name"));
   if (!name) return;
   const supabase = await createClient();
+  const clientId = str(formData.get("client_id")) || null;
+  let clientLabel = str(formData.get("client"));
+  if (!clientLabel && clientId) {
+    const { data: c } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+    clientLabel = c?.name ?? null;
+  }
   await supabase.from("projects").insert({
     name,
     status: str(formData.get("status")) ?? "planning",
     priority: str(formData.get("priority")) ?? "medium",
     category: str(formData.get("category")),
-    client: str(formData.get("client")),
+    client: clientLabel,
+    client_id: clientId,
     deadline: str(formData.get("deadline")),
   });
   revalidatePath("/", "layout");
@@ -184,6 +191,7 @@ export async function createReminder(formData: FormData) {
     title,
     note: str(formData.get("note")),
     due_at: dueAt,
+    client_id: str(formData.get("client_id")) || null,
   });
   revalidatePath("/", "layout");
 }
@@ -218,6 +226,7 @@ export async function updateProject(formData: FormData) {
       priority: str(formData.get("priority")) ?? "medium",
       category: str(formData.get("category")),
       client: str(formData.get("client")),
+      client_id: str(formData.get("client_id")) || null,
       deadline: str(formData.get("deadline")),
       note: str(formData.get("note")),
     })
@@ -271,11 +280,14 @@ export async function createInvoice(formData: FormData) {
   const taxRate = Number(str(formData.get("tax_rate")) ?? "0") || 0;
   const subtotal = lineItems.reduce((s, li) => s + li.quantity * li.rate, 0);
   const amount = Math.round(subtotal * (1 + taxRate / 100) * 100) / 100;
+  const kind = str(formData.get("kind")) || "invoice";
+  const clientId = str(formData.get("client_id")) || null;
   const { data } = await supabase
     .from("invoices")
     .insert({
       invoice_number: str(formData.get("invoice_number")),
-      client_id: str(formData.get("client_id")),
+      client_id: clientId,
+      kind,
       line_items: lineItems,
       tax_rate: taxRate,
       notes: str(formData.get("notes")),
@@ -286,6 +298,15 @@ export async function createInvoice(formData: FormData) {
     })
     .select("id")
     .single();
+  if (kind === "quote" && data?.id) {
+    const followUp = new Date();
+    followUp.setDate(followUp.getDate() + 3);
+    await supabase.from("reminders").insert({
+      title: `Follow up on quote ${str(formData.get("invoice_number")) ?? ""}`.trim(),
+      due_at: followUp.toISOString(),
+      client_id: clientId,
+    });
+  }
   revalidatePath("/", "layout");
   if (data?.id) redirect(`/invoices/${data.id}`);
 }
@@ -303,6 +324,7 @@ export async function updateInvoice(formData: FormData) {
     .update({
       invoice_number: str(formData.get("invoice_number")),
       client_id: str(formData.get("client_id")),
+      kind: str(formData.get("kind")) || "invoice",
       line_items: lineItems,
       tax_rate: taxRate,
       notes: str(formData.get("notes")),
@@ -324,6 +346,47 @@ export async function setInvoiceStatus(formData: FormData) {
     .from("invoices")
     .update({ status, paid_on: status === "paid" ? new Date().toISOString().slice(0, 10) : null })
     .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function convertQuoteToInvoice(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  const { data: q } = await supabase
+    .from("invoices")
+    .select("client_id, line_items, tax_rate, notes, amount")
+    .eq("id", id)
+    .maybeSingle();
+  if (!q) return;
+  const { count } = await supabase.from("invoices").select("id", { count: "exact", head: true }).eq("kind", "invoice");
+  const number = `INV-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  const { data: created } = await supabase
+    .from("invoices")
+    .insert({
+      kind: "invoice",
+      status: "sent",
+      invoice_number: number,
+      client_id: q.client_id,
+      line_items: q.line_items,
+      tax_rate: q.tax_rate,
+      notes: q.notes,
+      amount: q.amount,
+      issued_on: today(),
+    })
+    .select("id")
+    .single();
+  await supabase.from("invoices").update({ status: "accepted" }).eq("id", id);
+  revalidatePath("/", "layout");
+  if (created?.id) redirect(`/invoices/${created.id}`);
+}
+
+export async function setClientStage(formData: FormData) {
+  const id = str(formData.get("id"));
+  const stage = str(formData.get("stage"));
+  if (!id || !stage) return;
+  const supabase = await createClient();
+  await supabase.from("clients").update({ stage }).eq("id", id);
   revalidatePath("/", "layout");
 }
 

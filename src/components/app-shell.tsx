@@ -20,6 +20,7 @@ import {
   Timer,
   CalendarDays,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -37,6 +38,7 @@ const nav = [
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/clients", label: "Clients", icon: Users },
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/time", label: "Time", icon: Timer },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },

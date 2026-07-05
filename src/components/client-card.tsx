@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Pencil, Trash2, Mail, Phone } from "lucide-react";
-import type { Client } from "@/lib/data";
+import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { updateClient, deleteClient } from "@/app/actions";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
+
+const STAGE_BADGE: Record<ClientStage, { label: string; className: string }> = {
+  lead: { label: "Lead", className: "bg-slate-500/15 text-slate-400" },
+  quoted: { label: "Quoted", className: "bg-blue-500/15 text-blue-400" },
+  won: { label: "Won", className: "bg-emerald-500/15 text-emerald-400" },
+  lost: { label: "Lost", className: "bg-red-500/15 text-red-400" },
+};
 
 export function ClientCard({ client }: { client: Client }) {
   const [editing, setEditing] = useState(false);
@@ -52,17 +60,22 @@ export function ClientCard({ client }: { client: Client }) {
     );
   }
 
+  const stage = STAGE_BADGE[client.stage] ?? STAGE_BADGE.lead;
+
   return (
     <Card className="transition-transform hover:-translate-y-0.5">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold">{client.name}</p>
+          <Link href={`/clients/${client.id}`} className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold hover:underline">{client.name}</p>
             {client.company ? <p className="truncate text-xs text-muted-foreground">{client.company}</p> : null}
+          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", stage.className)}>{stage.label}</span>
+            <button type="button" onClick={() => setEditing(true)} aria-label="Edit client" className="text-muted-foreground/60 transition hover:text-foreground">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button type="button" onClick={() => setEditing(true)} aria-label="Edit client" className="text-muted-foreground/60 transition hover:text-foreground">
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
         </div>
         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
           {client.email ? (
@@ -77,6 +90,12 @@ export function ClientCard({ client }: { client: Client }) {
           ) : null}
           {client.address ? <p className="whitespace-pre-line">{client.address}</p> : null}
         </div>
+        <Link
+          href={`/clients/${client.id}`}
+          className="mt-3 inline-block text-xs font-medium text-primary transition hover:underline"
+        >
+          View customer →
+        </Link>
       </CardContent>
     </Card>
   );

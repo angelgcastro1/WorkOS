@@ -9,6 +9,7 @@ type PublicInvoice = {
   id: string;
   invoiceNumber: string | null;
   status: string;
+  kind: string | null;
   amount: number;
   issuedOn: string | null;
   dueOn: string | null;
@@ -32,6 +33,7 @@ export default async function PublicInvoicePage({
   const supabase = await createClient();
   const { data } = await supabase.rpc("get_public_invoice", { p_token: token });
   const inv = (data ?? null) as PublicInvoice | null;
+  const isQuote = inv?.kind === "quote";
 
   if (!inv) {
     return (
@@ -54,6 +56,7 @@ export default async function PublicInvoicePage({
         issuedOn={inv.issuedOn}
         dueOn={inv.dueOn}
         status={inv.status}
+        kind={isQuote ? "quote" : "invoice"}
         client={inv.client}
         lineItems={inv.lineItems}
         taxRate={inv.taxRate}
@@ -61,7 +64,9 @@ export default async function PublicInvoicePage({
       />
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <PrintButton />
-        <PublicPayPanel token={token} status={inv.status} amountLabel={formatMoney(inv.amount)} sessionId={sp.session ?? null} />
+        {isQuote ? null : (
+          <PublicPayPanel token={token} status={inv.status} amountLabel={formatMoney(inv.amount)} sessionId={sp.session ?? null} />
+        )}
       </div>
     </div>
   );

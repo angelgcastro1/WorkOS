@@ -35,7 +35,15 @@ export function AssistantChat() {
     setLoading(true);
     const supabase = createClient();
     const { data, error: invokeError } = await supabase.functions.invoke("ai-assistant", { body: { messages: next } });
-    const res = data as { text?: string; error?: string } | null;
+    let res = data as { text?: string; error?: string } | null;
+    // On a non-2xx response supabase-js returns data=null and stashes the body on error.context.
+    if (!res && invokeError && typeof invokeError === "object" && "context" in invokeError) {
+      try {
+        res = (await (invokeError as { context: Response }).context.json()) as { text?: string; error?: string };
+      } catch {
+        // fall through to the generic message
+      }
+    }
     if (res?.text) {
       const txt = res.text;
       setMessages((m) => [...m, { role: "assistant", content: txt }]);

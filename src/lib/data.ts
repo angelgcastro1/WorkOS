@@ -6,7 +6,9 @@ export type Priority = "low" | "medium" | "high" | "urgent";
 export type ProjectStatus = "planning" | "active" | "on_hold" | "done";
 export type NoteType = "Idea" | "Meeting" | "Client" | "SOP" | "Prompt" | "Note";
 export type ApplicationStage = "applied" | "screening" | "interview" | "offer" | "rejected";
-export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
+export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "accepted" | "declined";
+export type DocKind = "invoice" | "quote";
+export type ClientStage = "lead" | "quoted" | "won" | "lost";
 
 export interface Profile {
   id: string;
@@ -26,6 +28,7 @@ export interface Project {
   priority: Priority;
   category: string | null;
   client: string | null;
+  clientId: string | null;
   deadline: string | null;
   note: string | null;
   tasksDone: number;
@@ -87,6 +90,7 @@ export interface Reminder {
   note: string | null;
   dueAt: string;
   done: boolean;
+  clientId: string | null;
 }
 
 export interface Application {
@@ -107,6 +111,7 @@ export interface Client {
   email: string | null;
   phone: string | null;
   address: string | null;
+  stage: ClientStage;
 }
 
 export interface LineItem {
@@ -118,6 +123,7 @@ export interface LineItem {
 export interface Invoice {
   id: string;
   publicToken: string;
+  kind: DocKind;
   invoiceNumber: string | null;
   client: string | null;
   clientId: string | null;

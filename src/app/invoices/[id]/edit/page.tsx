@@ -10,13 +10,14 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const invoice = invoices.find((i) => i.id === id);
   if (!invoice) redirect("/invoices");
   const todayIso = new Date().toISOString().slice(0, 10);
+  const noun = invoice.kind === "quote" ? "quote" : "invoice";
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Link href={`/invoices/${id}`} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back to invoice
+        <ArrowLeft className="h-4 w-4" /> Back to {noun}
       </Link>
-      <h1 className="text-2xl font-bold tracking-tight">Edit invoice</h1>
+      <h1 className="text-2xl font-bold tracking-tight">Edit {noun}</h1>
       <InvoiceEditor
         clients={clients}
         invoice={invoice}

@@ -1,4 +1,4 @@
-import type { LineItem } from "@/lib/data";
+import type { DocKind, LineItem } from "@/lib/data";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 
@@ -23,6 +23,7 @@ type InvoicePaperProps = {
   lineItems: LineItem[];
   taxRate: number;
   notes: string | null;
+  kind?: DocKind;
 };
 
 export function InvoicePaper({
@@ -39,7 +40,9 @@ export function InvoicePaper({
   lineItems,
   taxRate,
   notes,
+  kind = "invoice",
 }: InvoicePaperProps) {
+  const isQuote = kind === "quote";
   const subtotal = lineItems.reduce((s, li) => s + li.quantity * li.rate, 0);
   const tax = (subtotal * taxRate) / 100;
   const total = subtotal + tax;
@@ -58,10 +61,10 @@ export function InvoicePaper({
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-2xl font-bold tracking-tight">INVOICE</p>
+          <p className="text-2xl font-bold tracking-tight">{isQuote ? "QUOTE" : "INVOICE"}</p>
           {invoiceNumber ? <p className="text-sm text-slate-500">{invoiceNumber}</p> : null}
           <p className="mt-2 text-xs text-slate-500">Issued {formatDate(issuedOn)}</p>
-          {dueOn ? <p className="text-xs text-slate-500">Due {formatDate(dueOn)}</p> : null}
+          {dueOn ? <p className="text-xs text-slate-500">{isQuote ? "Valid until" : "Due"} {formatDate(dueOn)}</p> : null}
         </div>
       </div>
 
@@ -137,6 +140,16 @@ export function InvoicePaper({
       {status === "paid" ? (
         <p className="mt-6 inline-block rounded-md border-2 border-emerald-500 px-3 py-1 text-sm font-bold uppercase tracking-wide text-emerald-600">
           Paid
+        </p>
+      ) : null}
+      {status === "accepted" ? (
+        <p className="mt-6 inline-block rounded-md border-2 border-emerald-500 px-3 py-1 text-sm font-bold uppercase tracking-wide text-emerald-600">
+          Accepted
+        </p>
+      ) : null}
+      {status === "declined" ? (
+        <p className="mt-6 inline-block rounded-md border-2 border-red-400 px-3 py-1 text-sm font-bold uppercase tracking-wide text-red-500">
+          Declined
         </p>
       ) : null}
     </div>

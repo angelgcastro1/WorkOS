@@ -11,9 +11,11 @@ import type {
   Invoice,
   TimeEntry,
   Client,
+  ClientStage,
   CalendarEvent,
   EventType,
   RepeatRule,
+  DocKind,
   LineItem,
   Profile,
   ProjectStatus,
@@ -31,6 +33,7 @@ interface ProjectRow {
   priority: string;
   category: string | null;
   client: string | null;
+  client_id: string | null;
   deadline: string | null;
   note: string | null;
 }
@@ -73,6 +76,7 @@ interface ReminderRow {
   note: string | null;
   due_at: string;
   done: boolean;
+  client_id: string | null;
 }
 interface AttachmentRow {
   id: string;
@@ -96,6 +100,7 @@ interface ApplicationRow {
 interface InvoiceRow {
   id: string;
   public_token: string;
+  kind: string;
   invoice_number: string | null;
   client: string | null;
   client_id: string | null;
@@ -122,6 +127,7 @@ interface ClientRow {
   email: string | null;
   phone: string | null;
   address: string | null;
+  stage: string | null;
 }
 interface EventRow {
   id: string;
@@ -237,6 +243,7 @@ export async function getWorkspace(): Promise<Workspace> {
       priority: p.priority as Priority,
       category: p.category,
       client: p.client,
+      clientId: p.client_id,
       deadline: p.deadline,
       note: p.note,
       tasksDone: done,
@@ -292,6 +299,7 @@ export async function getWorkspace(): Promise<Workspace> {
     note: r.note,
     dueAt: r.due_at,
     done: r.done,
+    clientId: r.client_id,
   }));
 
   const applications: Application[] = applicationRows.map((a) => ({
@@ -308,6 +316,7 @@ export async function getWorkspace(): Promise<Workspace> {
   const invoices: Invoice[] = invoiceRows.map((i) => ({
     id: i.id,
     publicToken: i.public_token,
+    kind: (i.kind ?? "invoice") as DocKind,
     invoiceNumber: i.invoice_number,
     client: i.client,
     clientId: i.client_id,
@@ -336,6 +345,7 @@ export async function getWorkspace(): Promise<Workspace> {
     email: c.email,
     phone: c.phone,
     address: c.address,
+    stage: (c.stage ?? "lead") as ClientStage,
   }));
 
   const events: CalendarEvent[] = eventRows.map((e) => ({
