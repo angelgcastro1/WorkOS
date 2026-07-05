@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Mail, Phone, MapPin, PhoneCall, Pencil, FileText, Receipt, Briefcase } from "lucide-react";
-import { getWorkspace, getProfile } from "@/lib/queries";
+import { getWorkspace, getProfile, getClientNotes } from "@/lib/queries";
 import { createReminder } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui";
 import { ClientStageSelect } from "@/components/client-stage-select";
+import { ClientNotesPanel } from "@/components/client-notes-panel";
 import { FollowUpButton } from "@/components/follow-up-button";
 import { cn, formatMoney, formatDate } from "@/lib/utils";
 
@@ -27,7 +28,7 @@ const PROJECT_BADGE: Record<string, string> = {
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [workspace, profile, clientNotes] = await Promise.all([getWorkspace(), getProfile(), getClientNotes(id)]);
   const client = workspace.clients.find((c) => c.id === id);
   if (!client) redirect("/clients");
 
@@ -117,6 +118,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </Card>
         ))}
       </section>
+
+      {/* Activity & notes log */}
+      <Card>
+        <CardContent className="space-y-3 p-5">
+          <h2 className="text-sm font-semibold">Activity &amp; notes</h2>
+          <ClientNotesPanel clientId={client.id} notes={clientNotes} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Contact */}

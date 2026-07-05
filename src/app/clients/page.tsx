@@ -4,7 +4,7 @@ import { getWorkspace } from "@/lib/queries";
 import { addClient } from "@/app/actions";
 import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { ClientCard } from "@/components/client-card";
+import { ClientsBrowser } from "@/components/clients-browser";
 
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
@@ -37,15 +37,7 @@ export default async function ClientsPage() {
         </form>
       </Card>
 
-      {clients.length === 0 ? (
-        <div className="py-12 text-center text-sm text-muted-foreground">No clients yet — add your first above (add their address via the edit pencil).</div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {clients.map((c) => (
-            <ClientCard key={c.id} client={c} />
-          ))}
-        </div>
-      )}
+      <ClientsBrowser clients={clients} />
     </div>
   );
 }

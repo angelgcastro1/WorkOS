@@ -390,6 +390,23 @@ export async function setClientStage(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function addClientNote(formData: FormData) {
+  const clientId = str(formData.get("client_id"));
+  const body = str(formData.get("body"));
+  if (!clientId || !body) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").insert({ client_id: clientId, body });
+  revalidatePath("/", "layout");
+}
+
+export async function deleteClientNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function deleteInvoice(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;

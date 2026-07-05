@@ -12,6 +12,7 @@ import type {
   TimeEntry,
   Client,
   ClientStage,
+  ClientNote,
   CalendarEvent,
   EventType,
   RepeatRule,
@@ -187,6 +188,21 @@ export async function getProfile(): Promise<Profile | null> {
     businessAddress: data?.business_address ?? null,
     businessPhone: data?.business_phone ?? null,
   };
+}
+
+export async function getClientNotes(clientId: string): Promise<ClientNote[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("client_notes")
+    .select("id, client_id, body, created_at")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((n) => ({
+    id: n.id as string,
+    clientId: n.client_id as string,
+    body: (n.body ?? "") as string,
+    createdAt: n.created_at as string,
+  }));
 }
 
 export async function getWorkspace(): Promise<Workspace> {

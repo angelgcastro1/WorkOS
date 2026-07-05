@@ -114,6 +114,13 @@ export interface Client {
   stage: ClientStage;
 }
 
+export interface ClientNote {
+  id: string;
+  clientId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface LineItem {
   description: string;
   quantity: number;
