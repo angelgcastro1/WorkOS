@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeft, Plus, Mail, Phone, MapPin, PhoneCall, Pencil, FileText, Receipt, Briefcase, Paperclip, Download, Link2 } from "lucide-react";
+import { ArrowLeft, Plus, Mail, Phone, MapPin, PhoneCall, Pencil, FileText, Receipt, Briefcase, Paperclip, Link2 } from "lucide-react";
 import { getWorkspace, getProfile, getClientNotes, getIntakeSubmissions } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { createReminder } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui";
 import { ClientStageSelect } from "@/components/client-stage-select";
 import { ClientNotesPanel } from "@/components/client-notes-panel";
+import { AttachmentGallery } from "@/components/attachment-gallery";
 import { FollowUpButton } from "@/components/follow-up-button";
 import { cn, formatMoney, formatDate } from "@/lib/utils";
 
@@ -181,26 +182,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               </div>
             ) : null}
             {intakeAttachments.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {intakeAttachments.map((a) => {
-                  const url = signed.get(a.path);
-                  return url ? (
-                    <a
-                      key={a.path}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs transition hover:bg-muted"
-                    >
-                      <Download className="h-3.5 w-3.5 text-muted-foreground" /> {a.name}
-                    </a>
-                  ) : (
-                    <span key={a.path} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-                      <Paperclip className="h-3.5 w-3.5" /> {a.name}
-                    </span>
-                  );
-                })}
-              </div>
+              <AttachmentGallery files={intakeAttachments.map((a) => ({ path: a.path, name: a.name, url: signed.get(a.path) ?? null }))} />
             ) : null}
           </CardContent>
         </Card>

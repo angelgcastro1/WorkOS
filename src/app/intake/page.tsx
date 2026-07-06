@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Mail, Phone, ArrowRight, Inbox, Paperclip, Download, Link2 } from "lucide-react";
+import { Mail, Phone, ArrowRight, Inbox, Paperclip, Link2 } from "lucide-react";
 import { getIntakeSubmissions } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui";
 import { IntakeLinkCard } from "@/components/intake-link-card";
+import { AttachmentGallery } from "@/components/attachment-gallery";
 import { formatDate } from "@/lib/utils";
 
 // Turn a free-text links field into clickable http(s) links (only safe schemes become anchors).
@@ -128,26 +129,7 @@ export default async function IntakePage() {
                       <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         <Paperclip className="h-3.5 w-3.5" /> Uploaded files
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {s.attachments.map((a) => {
-                          const url = signed.get(a.path);
-                          return url ? (
-                            <a
-                              key={a.path}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs transition hover:bg-muted"
-                            >
-                              <Download className="h-3.5 w-3.5 text-muted-foreground" /> {a.name}
-                            </a>
-                          ) : (
-                            <span key={a.path} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
-                              <Paperclip className="h-3.5 w-3.5" /> {a.name}
-                            </span>
-                          );
-                        })}
-                      </div>
+                      <AttachmentGallery files={s.attachments.map((a) => ({ path: a.path, name: a.name, url: signed.get(a.path) ?? null }))} />
                     </div>
                   ) : null}
 
