@@ -1,12 +1,39 @@
 import Link from "next/link";
-import { Mail, Phone, ArrowRight, Inbox } from "lucide-react";
+import type { ReactNode } from "react";
+import { Mail, Phone, ArrowRight, Inbox, Paperclip, Download, Link2 } from "lucide-react";
 import { getIntakeSubmissions } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui";
 import { IntakeLinkCard } from "@/components/intake-link-card";
 import { formatDate } from "@/lib/utils";
 
+// Turn a free-text links field into clickable http(s) links (only safe schemes become anchors).
+function renderLinks(text: string): ReactNode[] {
+  return text.split(/(\s+)/).map((tok, i) => {
+    if (/^https?:\/\/[^\s]+$/i.test(tok)) {
+      return (
+        <a key={i} href={tok} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline underline-offset-2">
+          {tok}
+        </a>
+      );
+    }
+    return <span key={i}>{tok}</span>;
+  });
+}
+
 export default async function IntakePage() {
   const submissions = await getIntakeSubmissions();
+
+  // Build short-lived signed download URLs for any uploaded files (private bucket).
+  const signed = new Map<string, string>();
+  const paths = submissions.flatMap((s) => s.attachments.map((a) => a.path));
+  if (paths.length > 0) {
+    const supabase = await createClient();
+    const { data: signedList } = await supabase.storage.from("intake-uploads").createSignedUrls(paths, 3600);
+    for (const item of signedList ?? []) {
+      if (item.path && item.signedUrl) signed.set(item.path, item.signedUrl);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -86,6 +113,43 @@ export default async function IntakePage() {
                   ) : null}
 
                   {s.details ? <p className="whitespace-pre-line border-t border-border pt-3 text-sm text-muted-foreground">{s.details}</p> : null}
+
+                  {s.links ? (
+                    <div className="border-t border-border pt-3">
+                      <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Link2 className="h-3.5 w-3.5" /> Links
+                      </p>
+                      <p className="whitespace-pre-line break-words text-sm text-muted-foreground">{renderLinks(s.links)}</p>
+                    </div>
+                  ) : null}
+
+                  {s.attachments.length > 0 ? (
+                    <div className="border-t border-border pt-3">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Paperclip className="h-3.5 w-3.5" /> Uploaded files
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {s.attachments.map((a) => {
+                          const url = signed.get(a.path);
+                          return url ? (
+                            <a
+                              key={a.path}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs transition hover:bg-muted"
+                            >
+                              <Download className="h-3.5 w-3.5 text-muted-foreground" /> {a.name}
+                            </a>
+                          ) : (
+                            <span key={a.path} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                              <Paperclip className="h-3.5 w-3.5" /> {a.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {s.clientId ? (
                     <Link

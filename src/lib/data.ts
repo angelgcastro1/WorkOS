@@ -121,6 +121,11 @@ export interface ClientNote {
   createdAt: string;
 }
 
+export interface IntakeAttachment {
+  path: string;
+  name: string;
+}
+
 export interface IntakeSubmission {
   id: string;
   name: string;
@@ -132,6 +137,8 @@ export interface IntakeSubmission {
   timeline: string | null;
   details: string | null;
   source: string | null;
+  links: string | null;
+  attachments: IntakeAttachment[];
   status: string;
   clientId: string | null;
   createdAt: string;

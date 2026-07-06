@@ -210,7 +210,7 @@ export async function getIntakeSubmissions(): Promise<IntakeSubmission[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("intake_submissions")
-    .select("id, name, email, phone, company, services, budget, timeline, details, source, status, client_id, created_at")
+    .select("id, name, email, phone, company, services, budget, timeline, details, source, links, attachments, status, client_id, created_at")
     .order("created_at", { ascending: false });
   return (data ?? []).map((s) => ({
     id: s.id as string,
@@ -223,6 +223,15 @@ export async function getIntakeSubmissions(): Promise<IntakeSubmission[]> {
     timeline: (s.timeline ?? null) as string | null,
     details: (s.details ?? null) as string | null,
     source: (s.source ?? null) as string | null,
+    links: (s.links ?? null) as string | null,
+    attachments: Array.isArray(s.attachments)
+      ? (s.attachments as unknown[])
+          .map((a) => {
+            const o = (a ?? {}) as { path?: unknown; name?: unknown };
+            return { path: typeof o.path === "string" ? o.path : "", name: typeof o.name === "string" ? o.name : "file" };
+          })
+          .filter((a) => a.path.length > 0)
+      : [],
     status: (s.status ?? "new") as string,
     clientId: (s.client_id ?? null) as string | null,
     createdAt: s.created_at as string,
