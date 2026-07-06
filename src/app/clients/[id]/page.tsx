@@ -1,13 +1,28 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Mail, Phone, MapPin, PhoneCall, Pencil, FileText, Receipt, Briefcase } from "lucide-react";
-import { getWorkspace, getProfile, getClientNotes } from "@/lib/queries";
+import type { ReactNode } from "react";
+import { ArrowLeft, Plus, Mail, Phone, MapPin, PhoneCall, Pencil, FileText, Receipt, Briefcase, Paperclip, Download, Link2 } from "lucide-react";
+import { getWorkspace, getProfile, getClientNotes, getIntakeSubmissions } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
 import { createReminder } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui";
 import { ClientStageSelect } from "@/components/client-stage-select";
 import { ClientNotesPanel } from "@/components/client-notes-panel";
 import { FollowUpButton } from "@/components/follow-up-button";
 import { cn, formatMoney, formatDate } from "@/lib/utils";
+
+function renderLinks(text: string): ReactNode[] {
+  return text.split(/(\s+)/).map((tok, i) => {
+    if (/^https?:\/\/[^\s]+$/i.test(tok)) {
+      return (
+        <a key={i} href={tok} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline underline-offset-2">
+          {tok}
+        </a>
+      );
+    }
+    return <span key={i}>{tok}</span>;
+  });
+}
 
 const DOC_BADGE: Record<string, string> = {
   draft: "bg-slate-500/15 text-slate-400",
@@ -28,9 +43,28 @@ const PROJECT_BADGE: Record<string, string> = {
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [workspace, profile, clientNotes] = await Promise.all([getWorkspace(), getProfile(), getClientNotes(id)]);
+  const [workspace, profile, clientNotes, allIntake] = await Promise.all([
+    getWorkspace(),
+    getProfile(),
+    getClientNotes(id),
+    getIntakeSubmissions(),
+  ]);
   const client = workspace.clients.find((c) => c.id === id);
   if (!client) redirect("/clients");
+
+  // Files + links this client sent through the intake form.
+  const intakeForClient = allIntake.filter((s) => s.clientId === id);
+  const intakeAttachments = intakeForClient.flatMap((s) => s.attachments);
+  const intakeLinks = intakeForClient.map((s) => s.links).filter((l): l is string => !!l && l.trim().length > 0);
+  const signed = new Map<string, string>();
+  if (intakeAttachments.length > 0) {
+    const supabase = await createClient();
+    const { data: signedList } = await supabase.storage
+      .from("intake-uploads")
+      .createSignedUrls(intakeAttachments.map((a) => a.path), 3600);
+    for (const it of signedList ?? []) if (it.path && it.signedUrl) signed.set(it.path, it.signedUrl);
+  }
+  const hasIntake = intakeAttachments.length > 0 || intakeLinks.length > 0;
 
   const docs = workspace.invoices.filter((i) => i.clientId === id);
   const quotes = docs.filter((i) => i.kind === "quote");
@@ -126,6 +160,51 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <ClientNotesPanel clientId={client.id} notes={clientNotes} />
         </CardContent>
       </Card>
+
+      {/* Files & links from the intake form */}
+      {hasIntake ? (
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              <Paperclip className="h-4 w-4 text-muted-foreground" /> Files &amp; links from intake
+            </h2>
+            {intakeLinks.length > 0 ? (
+              <div>
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Link2 className="h-3.5 w-3.5" /> Links
+                </p>
+                {intakeLinks.map((l, i) => (
+                  <p key={i} className="whitespace-pre-line break-words text-sm text-muted-foreground">
+                    {renderLinks(l)}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {intakeAttachments.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {intakeAttachments.map((a) => {
+                  const url = signed.get(a.path);
+                  return url ? (
+                    <a
+                      key={a.path}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs transition hover:bg-muted"
+                    >
+                      <Download className="h-3.5 w-3.5 text-muted-foreground" /> {a.name}
+                    </a>
+                  ) : (
+                    <span key={a.path} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <Paperclip className="h-3.5 w-3.5" /> {a.name}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Contact */}

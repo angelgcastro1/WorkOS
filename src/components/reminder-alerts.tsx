@@ -86,6 +86,26 @@ export function ReminderAlerts() {
     setToasts((prev) => prev.filter((x) => x.id !== id));
   }
 
+  async function snooze(id: string, when: number | "tomorrow") {
+    const target = new Date();
+    if (when === "tomorrow") {
+      target.setDate(target.getDate() + 1);
+      target.setHours(9, 0, 0, 0);
+    } else {
+      target.setMinutes(target.getMinutes() + when);
+    }
+    const whenIso = target.toISOString();
+    const supabase = createClient();
+    if (id.startsWith("rem:")) {
+      await supabase.from("reminders").update({ due_at: whenIso, notified: false }).eq("id", id.slice(4));
+    } else if (id.startsWith("ev:")) {
+      await supabase.from("events").update({ reminder_at: whenIso, reminded_at: null }).eq("id", id.split(":")[1]);
+    }
+    // Allow it to alert again once the snooze window passes.
+    alerted.current.delete(id);
+    dismiss(id);
+  }
+
   if (toasts.length === 0) return null;
 
   return (
@@ -98,6 +118,27 @@ export function ReminderAlerts() {
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-muted-foreground">Reminder due</p>
             <p className="text-sm font-medium">{r.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">Snooze</span>
+              <button
+                onClick={() => snooze(r.id, 60)}
+                className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-muted"
+              >
+                1h
+              </button>
+              <button
+                onClick={() => snooze(r.id, 180)}
+                className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-muted"
+              >
+                3h
+              </button>
+              <button
+                onClick={() => snooze(r.id, "tomorrow")}
+                className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium transition hover:bg-muted"
+              >
+                Tomorrow
+              </button>
+            </div>
           </div>
           <button onClick={() => dismiss(r.id)} aria-label="Dismiss" className="text-muted-foreground/60 transition hover:text-foreground">
             <X className="h-4 w-4" />

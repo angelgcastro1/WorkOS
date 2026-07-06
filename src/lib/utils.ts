@@ -11,7 +11,9 @@ export function formatMoney(value: number): string {
 
 export function formatDate(value?: string | null): string {
   if (!value) return "";
-  const d = new Date(value + "T00:00:00");
+  // Accept both date-only ("YYYY-MM-DD") and full ISO timestamps ("...T...Z").
+  const d = value.includes("T") ? new Date(value) : new Date(value + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
