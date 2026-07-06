@@ -1,16 +1,60 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, CheckCircle2, Send } from "lucide-react";
+import { Loader2, CheckCircle2, Check, ChevronDown, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BrandMark } from "@/components/brand-mark";
 import { cn } from "@/lib/utils";
 
-const SERVICES = [
-  "Branding & logo design",
-  "Graphic design & print",
-  "Web design & development",
-  "Video, photo & social media",
+const SERVICE_GROUPS: { category: string; options: string[] }[] = [
+  {
+    category: "Branding & logo design",
+    options: [
+      "Logo design",
+      "Logo refresh",
+      "Brand identity",
+      "Brand guidelines",
+      "Social media brand kit",
+      "Business cards / stationery",
+      "Other branding need",
+    ],
+  },
+  {
+    category: "Graphic design & print",
+    options: [
+      "Flyer design",
+      "Brochure design",
+      "Poster design",
+      "Presentation / pitch deck",
+      "Banner / signage",
+      "Print-ready files",
+      "Other graphic design need",
+    ],
+  },
+  {
+    category: "Web design & development",
+    options: [
+      "New website",
+      "Website redesign",
+      "Landing page",
+      "Portfolio website",
+      "Website updates",
+      "Contact / intake form setup",
+      "Other web need",
+    ],
+  },
+  {
+    category: "Video, photo & social media",
+    options: [
+      "Promotional video",
+      "Social media video",
+      "Testimonial video",
+      "Event recap video",
+      "Photography / headshots",
+      "Motion graphics",
+      "Other media need",
+    ],
+  },
 ];
 const BUDGETS = ["Under $500", "$500 – $1,000", "$1,000 – $5,000", "$5,000+", "Not sure yet"];
 const TIMELINES = ["As soon as possible", "Within 2 weeks", "This month", "1 – 3 months", "Flexible / just exploring"];
@@ -26,6 +70,7 @@ export function IntakeForm() {
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [services, setServices] = useState<string[]>([]);
+  const [openCats, setOpenCats] = useState<string[]>([]);
   const [budget, setBudget] = useState("");
   const [timeline, setTimeline] = useState("");
   const [source, setSource] = useState("");
@@ -35,6 +80,10 @@ export function IntakeForm() {
 
   function toggleService(s: string) {
     setServices((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  }
+
+  function toggleCat(category: string) {
+    setOpenCats((prev) => (prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -108,29 +157,55 @@ export function IntakeForm() {
 
         <div>
           <label className={labelClass}>What do you need help with?</label>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {SERVICES.map((s) => {
-              const active = services.includes(s);
+          <div className="space-y-2">
+            {SERVICE_GROUPS.map((g) => {
+              const isOpen = openCats.includes(g.category);
+              const count = g.options.filter((o) => services.includes(o)).length;
               return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleService(s)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition",
-                    active ? "border-primary bg-primary/10 text-foreground" : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "grid h-4 w-4 shrink-0 place-items-center rounded border",
-                      active ? "border-primary bg-primary text-primary-foreground" : "border-border",
-                    )}
+                <div key={g.category} className="overflow-hidden rounded-lg border border-border">
+                  <button
+                    type="button"
+                    onClick={() => toggleCat(g.category)}
+                    aria-expanded={isOpen}
+                    className="flex w-full items-center justify-between gap-2 bg-muted/40 px-3 py-2.5 text-left text-sm font-medium transition hover:bg-muted"
                   >
-                    {active ? <CheckCircle2 className="h-3 w-3" /> : null}
-                  </span>
-                  {s}
-                </button>
+                    <span className="flex items-center gap-2">
+                      {g.category}
+                      {count > 0 ? (
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">{count}</span>
+                      ) : null}
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", isOpen && "rotate-180")} />
+                  </button>
+                  {isOpen ? (
+                    <div className="space-y-1 border-t border-border p-2">
+                      {g.options.map((o) => {
+                        const active = services.includes(o);
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => toggleService(o)}
+                            className={cn(
+                              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition",
+                              active ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "grid h-4 w-4 shrink-0 place-items-center rounded border",
+                                active ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                              )}
+                            >
+                              {active ? <Check className="h-3 w-3" /> : null}
+                            </span>
+                            {o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
           </div>
