@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Mail, Phone, UserCheck } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone, UserCheck, Undo2 } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -109,7 +109,19 @@ export function ClientCard({ client }: { client: Client }) {
                 <UserCheck className="h-3.5 w-3.5" /> Move to client
               </button>
             </form>
-          ) : null}
+          ) : (
+            <form action={setClientStage}>
+              <input type="hidden" name="id" value={client.id} />
+              <input type="hidden" name="stage" value="lead" />
+              <button
+                type="submit"
+                title="Move this client back to your leads"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Undo2 className="h-3.5 w-3.5" /> Move to leads
+              </button>
+            </form>
+          )}
         </div>
       </CardContent>
     </Card>
