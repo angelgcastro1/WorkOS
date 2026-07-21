@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Mail, Phone } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone, UserCheck } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { updateClient, deleteClient } from "@/app/actions";
+import { updateClient, deleteClient, setClientStage } from "@/app/actions";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
@@ -90,12 +90,27 @@ export function ClientCard({ client }: { client: Client }) {
           ) : null}
           {client.address ? <p className="whitespace-pre-line">{client.address}</p> : null}
         </div>
-        <Link
-          href={`/clients/${client.id}`}
-          className="mt-3 inline-block text-xs font-medium text-primary transition hover:underline"
-        >
-          View customer →
-        </Link>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Link
+            href={`/clients/${client.id}`}
+            className="text-xs font-medium text-primary transition hover:underline"
+          >
+            View customer →
+          </Link>
+          {client.stage === "lead" ? (
+            <form action={setClientStage}>
+              <input type="hidden" name="id" value={client.id} />
+              <input type="hidden" name="stage" value="won" />
+              <button
+                type="submit"
+                title="Move this lead into your clients"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+              >
+                <UserCheck className="h-3.5 w-3.5" /> Move to client
+              </button>
+            </form>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );
