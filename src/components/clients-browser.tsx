@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Inbox, Search, Users } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { ClientCard } from "@/components/client-card";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,11 @@ const STAGE_TABS: { value: StageFilter; label: string }[] = [
   { value: "lost", label: "Lost" },
 ];
 
+function matchesQuery(c: Client, q: string) {
+  if (!q) return true;
+  return [c.name, c.company, c.email].some((v) => (v ?? "").toLowerCase().includes(q));
+}
+
 export function ClientsBrowser({ clients }: { clients: Client[] }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<StageFilter>("all");
@@ -26,14 +31,16 @@ export function ClientsBrowser({ clients }: { clients: Client[] }) {
     return c;
   }, [clients]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return clients.filter((c) => {
-      if (stage !== "all" && c.stage !== stage) return false;
-      if (!q) return true;
-      return [c.name, c.company, c.email].some((v) => (v ?? "").toLowerCase().includes(q));
-    });
-  }, [clients, query, stage]);
+  const q = query.trim().toLowerCase();
+
+  const incoming = useMemo(() => clients.filter((c) => c.stage === "lead" && matchesQuery(c, q)), [clients, q]);
+  const existing = useMemo(() => clients.filter((c) => c.stage !== "lead" && matchesQuery(c, q)), [clients, q]);
+  const filtered = useMemo(
+    () => clients.filter((c) => (stage === "all" || c.stage === stage) && matchesQuery(c, q)),
+    [clients, q, stage],
+  );
+
+  const showSections = stage === "all";
 
   return (
     <div className="space-y-4">
@@ -64,7 +71,46 @@ export function ClientsBrowser({ clients }: { clients: Client[] }) {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {showSections ? (
+        <>
+          <section className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Inbox className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Incoming Leads</h2>
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">{incoming.length}</span>
+              <span className="text-xs text-muted-foreground">New inquiries from your websites — follow up, then move them along.</span>
+            </div>
+            {incoming.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">No new leads right now.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {incoming.map((c) => (
+                  <ClientCard key={c.id} client={c} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3 pt-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Existing Clients</h2>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{existing.length}</span>
+            </div>
+            {existing.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {clients.length === 0 ? "No clients yet — add your first above." : "No existing clients match your search."}
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {existing.map((c) => (
+                  <ClientCard key={c.id} client={c} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      ) : filtered.length === 0 ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
           {clients.length === 0 ? "No clients yet — add your first above." : "No clients match your search."}
         </div>
