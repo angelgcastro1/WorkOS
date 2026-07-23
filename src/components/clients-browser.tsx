@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Inbox, Search, Users } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Inbox, RefreshCw, Search, Users } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { ClientCard } from "@/components/client-card";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,8 @@ function matchesQuery(c: Client, q: string) {
 export function ClientsBrowser({ clients }: { clients: Client[] }) {
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<StageFilter>("all");
+  const router = useRouter();
+  const [isRefreshing, startRefresh] = useTransition();
 
   const counts = useMemo(() => {
     const c: Record<StageFilter, number> = { all: clients.length, lead: 0, quoted: 0, won: 0, lost: 0 };
@@ -79,6 +82,16 @@ export function ClientsBrowser({ clients }: { clients: Client[] }) {
               <h2 className="text-sm font-semibold">Incoming Leads</h2>
               <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">{incoming.length}</span>
               <span className="text-xs text-muted-foreground">New inquiries from your websites — follow up, then move them along.</span>
+              <button
+                type="button"
+                onClick={() => startRefresh(() => router.refresh())}
+                disabled={isRefreshing}
+                title="Check for newly imported leads"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/20 disabled:opacity-60"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                {isRefreshing ? "Refreshing…" : "Refresh"}
+              </button>
             </div>
             {incoming.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">No new leads right now.</p>

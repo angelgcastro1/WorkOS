@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Mail, Phone, UserCheck, Undo2 } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone, UserCheck, Undo2, Clock } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,20 @@ const STAGE_BADGE: Record<ClientStage, { label: string; className: string }> = {
   won: { label: "Won", className: "bg-emerald-500/15 text-emerald-400" },
   lost: { label: "Lost", className: "bg-red-500/15 text-red-400" },
 };
+
+// When the lead/client landed in WorkCham (created_at), shown in the viewer's local time.
+function formatReceived(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export function ClientCard({ client }: { client: Client }) {
   const [editing, setEditing] = useState(false);
@@ -61,6 +75,11 @@ export function ClientCard({ client }: { client: Client }) {
   }
 
   const stage = STAGE_BADGE[client.stage] ?? STAGE_BADGE.lead;
+  const submittedLabel = formatReceived(client.submittedAt);
+  const receivedLabel = formatReceived(client.createdAt);
+  // Prefer the real form-submission time; fall back to when it entered WorkCham.
+  const dateLabel = submittedLabel ?? receivedLabel;
+  const datePrefix = submittedLabel ? "Submitted" : "Received";
 
   return (
     <Card className="transition-transform hover:-translate-y-0.5">
@@ -89,6 +108,11 @@ export function ClientCard({ client }: { client: Client }) {
             </p>
           ) : null}
           {client.address ? <p className="whitespace-pre-line">{client.address}</p> : null}
+          {dateLabel ? (
+            <p suppressHydrationWarning className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3" /> {datePrefix} {dateLabel}
+            </p>
+          ) : null}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2">
           <Link
