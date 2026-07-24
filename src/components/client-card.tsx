@@ -23,9 +23,10 @@ type Props = {
   isNew?: boolean;
   intakeSubmitted?: boolean;
   canMove?: boolean;
+  view?: "cards" | "list";
 };
 
-export function ClientCard({ client, isNew = false, intakeSubmitted = false, canMove = false }: Props) {
+export function ClientCard({ client, isNew = false, intakeSubmitted = false, canMove = false, view = "cards" }: Props) {
   const [editing, setEditing] = useState(false);
 
   async function handleSave(formData: FormData) {
@@ -79,6 +80,69 @@ export function ClientCard({ client, isNew = false, intakeSubmitted = false, can
       })
     : "";
 
+  const newBadge = isNew ? (
+    <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">New</span>
+  ) : null;
+  const stageBadge = <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", stage.className)}>{stage.label}</span>;
+  const moveButton = canMove ? (
+    <form action={setClientStage}>
+      <input type="hidden" name="id" value={client.id} />
+      <input type="hidden" name="stage" value="won" />
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/20"
+      >
+        <UserCheck className="h-3.5 w-3.5" /> Move to client
+      </button>
+    </form>
+  ) : null;
+  const editButton = (
+    <button type="button" onClick={() => setEditing(true)} aria-label="Edit client" className="text-muted-foreground/60 transition hover:text-foreground">
+      <Pencil className="h-3.5 w-3.5" />
+    </button>
+  );
+
+  if (view === "list") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card px-4 py-2.5 transition hover:bg-muted/40">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/clients/${client.id}`} className="truncate text-sm font-semibold hover:underline">
+              {client.name}
+            </Link>
+            {newBadge}
+            {stageBadge}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            {client.company ? <span className="truncate">{client.company}</span> : null}
+            {client.email ? (
+              <span className="flex items-center gap-1">
+                <Mail className="h-3 w-3" /> {client.email}
+              </span>
+            ) : null}
+            {client.phone ? (
+              <span className="flex items-center gap-1">
+                <Phone className="h-3 w-3" /> {client.phone}
+              </span>
+            ) : null}
+            {client.createdAt ? (
+              <span className="flex items-center gap-1" suppressHydrationWarning>
+                <Clock className="h-3 w-3" /> {addedLabel} {addedAt}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {moveButton}
+          <Link href={`/clients/${client.id}`} className="text-xs font-medium text-primary transition hover:underline">
+            View →
+          </Link>
+          {editButton}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card className="transition-transform hover:-translate-y-0.5">
       <CardContent className="p-5">
@@ -88,13 +152,9 @@ export function ClientCard({ client, isNew = false, intakeSubmitted = false, can
             {client.company ? <p className="truncate text-xs text-muted-foreground">{client.company}</p> : null}
           </Link>
           <div className="flex shrink-0 items-center gap-2">
-            {isNew ? (
-              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">New</span>
-            ) : null}
-            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", stage.className)}>{stage.label}</span>
-            <button type="button" onClick={() => setEditing(true)} aria-label="Edit client" className="text-muted-foreground/60 transition hover:text-foreground">
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            {newBadge}
+            {stageBadge}
+            {editButton}
           </div>
         </div>
         <div className="mt-3 space-y-1 text-xs text-muted-foreground">
@@ -119,18 +179,7 @@ export function ClientCard({ client, isNew = false, intakeSubmitted = false, can
           <Link href={`/clients/${client.id}`} className="text-xs font-medium text-primary transition hover:underline">
             View customer →
           </Link>
-          {canMove ? (
-            <form action={setClientStage}>
-              <input type="hidden" name="id" value={client.id} />
-              <input type="hidden" name="stage" value="won" />
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/20"
-              >
-                <UserCheck className="h-3.5 w-3.5" /> Move to client
-              </button>
-            </form>
-          ) : null}
+          {moveButton}
         </div>
       </CardContent>
     </Card>

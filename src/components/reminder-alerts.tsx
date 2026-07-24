@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 
 type DueItem = { id: string; title: string };
 
+// How often a still-due reminder re-surfaces to nudge you again.
+const RENAG_MS = 30 * 60 * 1000;
+
 // Latest occurrence reminder timestamp (ms) at or before now, honoring the repeat rule.
 function latestDueMs(reminderIso: string, rule: string, nowMs: number): number | null {
   const baseMs = new Date(reminderIso).getTime();
@@ -27,7 +30,8 @@ function latestDueMs(reminderIso: string, rule: string, nowMs: number): number |
 
 export function ReminderAlerts() {
   const [toasts, setToasts] = useState<DueItem[]>([]);
-  const alerted = useRef<Set<string>>(new Set());
+  // id -> last time (ms) we surfaced it; used to re-nag every RENAG_MS.
+  const lastShown = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -37,10 +41,11 @@ export function ReminderAlerts() {
     const supabase = createClient();
 
     function notify(items: DueItem[]) {
-      const fresh = items.filter((i) => !alerted.current.has(i.id));
-      if (fresh.length === 0) return;
-      for (const i of fresh) {
-        alerted.current.add(i.id);
+      const nowMs = Date.now();
+      const due = items.filter((i) => nowMs - (lastShown.current.get(i.id) ?? 0) >= RENAG_MS);
+      if (due.length === 0) return;
+      for (const i of due) {
+        lastShown.current.set(i.id, nowMs);
         if ("Notification" in window && Notification.permission === "granted") {
           try {
             new Notification("WorkCham reminder", { body: i.title });
@@ -49,7 +54,12 @@ export function ReminderAlerts() {
           }
         }
       }
-      setToasts((prev) => [...prev, ...fresh]);
+      // Add a toast for any that isn't already on screen (dismissed ones re-appear).
+      setToasts((prev) => {
+        const existing = new Set(prev.map((t) => t.id));
+        const add = due.filter((i) => !existing.has(i.id));
+        return add.length ? [...prev, ...add] : prev;
+      });
     }
 
     async function check() {
@@ -101,8 +111,8 @@ export function ReminderAlerts() {
     } else if (id.startsWith("ev:")) {
       await supabase.from("events").update({ reminder_at: whenIso, reminded_at: null }).eq("id", id.split(":")[1]);
     }
-    // Allow it to alert again once the snooze window passes.
-    alerted.current.delete(id);
+    // Clear its nag timer so it can alert again once the snooze window passes.
+    lastShown.current.delete(id);
     dismiss(id);
   }
 
@@ -111,9 +121,9 @@ export function ReminderAlerts() {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
       {toasts.map((r) => (
-        <div key={r.id} className="flex items-start gap-3 rounded-xl border border-border bg-card p-3 shadow-lg">
+        <div key={r.id} className="reminder-toast flex items-start gap-3 rounded-xl border border-primary/40 bg-card p-3 shadow-lg shadow-indigo-500/20">
           <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-            <Bell className="h-4 w-4" />
+            <Bell className="bell-ring h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-muted-foreground">Reminder due</p>
