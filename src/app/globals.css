@@ -140,3 +140,20 @@
   20%, 40%, 60% { transform: rotate(-14deg); }
 }
 .bell-ring { animation: bell-ring 1.5s ease-in-out infinite; transform-origin: top center; }
+
+/* Reminder chameleon mascot */
+@keyframes cham-peek {
+  0% { transform: translateY(20px) scale(0.5); opacity: 0; }
+  55% { transform: translateY(-6px) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes cham-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-5px) rotate(-5deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-5px) rotate(5deg); }
+}
+.reminder-cham {
+  transform-origin: bottom center;
+  animation: cham-peek 0.6s ease-out, cham-bob 2.6s ease-in-out 0.6s infinite;
+}

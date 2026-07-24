@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/brand-mark";
 
 type DueItem = { id: string; title: string };
 
@@ -120,6 +121,9 @@ export function ReminderAlerts() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+      <div className="pointer-events-none z-10 -mb-2.5 ml-4 flex">
+        <BrandMark height={40} alt="WorkCham" className="reminder-cham drop-shadow-lg" />
+      </div>
       {toasts.map((r) => (
         <div key={r.id} className="reminder-toast flex items-start gap-3 rounded-xl border border-primary/40 bg-card p-3 shadow-lg shadow-indigo-500/20">
           <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
