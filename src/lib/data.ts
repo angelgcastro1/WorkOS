@@ -112,8 +112,7 @@ export interface Client {
   phone: string | null;
   address: string | null;
   stage: ClientStage;
-  createdAt?: string | null;
-  submittedAt?: string | null;
+  createdAt: string | null;
 }
 
 export interface ClientNote {

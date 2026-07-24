@@ -5,15 +5,21 @@ import { addClient } from "@/app/actions";
 import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { ClientsBrowser } from "@/components/clients-browser";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ClientsPage() {
   const { clients } = await getWorkspace();
+  const nowIso = new Date().toISOString();
+  const newSince = new Date();
+  newSince.setDate(newSince.getDate() - 1);
+  const newSinceIso = newSince.toISOString();
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <Link href="/invoices" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Invoices
       </Link>
@@ -37,7 +43,7 @@ export default async function ClientsPage() {
         </form>
       </Card>
 
-      <ClientsBrowser clients={clients} />
+      <ClientsBrowser clients={clients} nowIso={nowIso} newSince={newSinceIso} />
     </div>
   );
 }

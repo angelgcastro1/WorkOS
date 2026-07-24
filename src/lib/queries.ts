@@ -168,24 +168,6 @@ function mapLineItems(raw: unknown): LineItem[] {
   });
 }
 
-// Pull the real form-submission time out of a lead's imported note body
-// (e.g. "... Submitted: 2026-07-22 02:29 UTC"). Returns an ISO string, or null
-// if there is no parseable "Submitted:" value. Tolerant of the handful of
-// date formats the lead importer has produced.
-function parseSubmittedAt(body: string | null | undefined): string | null {
-  if (!body) return null;
-  const m = body.match(/Submitted:\s*(.+)/i);
-  if (!m) return null;
-  const raw = m[1].split("(")[0].trim();
-  if (!raw) return null;
-  let d = new Date(raw);
-  if (Number.isNaN(d.getTime())) {
-    // Normalize "2026-07-22 02:29 UTC" -> "2026-07-22T02:29Z"
-    d = new Date(raw.replace(/\s+UTC$/i, "Z").replace(" ", "T"));
-  }
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
   const {
@@ -259,7 +241,7 @@ export async function getIntakeSubmissions(): Promise<IntakeSubmission[]> {
 
 export async function getWorkspace(): Promise<Workspace> {
   const supabase = await createClient();
-  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes, evRes, cnRes] = await Promise.all([
+  const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes, evRes] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: true }),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("notes").select("*").order("date", { ascending: false }),
@@ -271,7 +253,6 @@ export async function getWorkspace(): Promise<Workspace> {
     supabase.from("time_entries").select("*").order("entry_date", { ascending: false }),
     supabase.from("clients").select("*").order("name", { ascending: true }),
     supabase.from("events").select("*").order("event_date", { ascending: true }),
-    supabase.from("client_notes").select("client_id, body, created_at").order("created_at", { ascending: true }),
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];
@@ -407,13 +388,6 @@ export async function getWorkspace(): Promise<Workspace> {
     entryDate: te.entry_date,
   }));
 
-  const submittedByClient = new Map<string, string>();
-  for (const n of (cnRes.data ?? []) as { client_id: string | null; body: string | null }[]) {
-    if (!n.client_id || submittedByClient.has(n.client_id)) continue;
-    const submitted = parseSubmittedAt(n.body);
-    if (submitted) submittedByClient.set(n.client_id, submitted);
-  }
-
   const clients: Client[] = clientRows.map((c) => ({
     id: c.id,
     name: c.name,
@@ -422,8 +396,7 @@ export async function getWorkspace(): Promise<Workspace> {
     phone: c.phone,
     address: c.address,
     stage: (c.stage ?? "lead") as ClientStage,
-    createdAt: c.created_at,
-    submittedAt: submittedByClient.get(c.id) ?? null,
+    createdAt: (c.created_at ?? null) as string | null,
   }));
 
   const events: CalendarEvent[] = eventRows.map((e) => ({

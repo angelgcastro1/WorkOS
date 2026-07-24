@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui";
 import { IntakeLinkCard } from "@/components/intake-link-card";
 import { AttachmentGallery } from "@/components/attachment-gallery";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { formatDate } from "@/lib/utils";
 
 // Turn a free-text links field into clickable http(s) links (only safe schemes become anchors).
@@ -38,6 +39,7 @@ export default async function IntakePage() {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Intake</h1>
         <p className="text-sm text-muted-foreground">Share your form link and every response lands here — and in your inbox.</p>

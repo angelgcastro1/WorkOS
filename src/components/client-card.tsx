@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Mail, Phone, UserCheck, Undo2, Clock } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
-import { cn } from "@/lib/utils";
-import { updateClient, deleteClient, setClientStage } from "@/app/actions";
+import { cn, timeAgo } from "@/lib/utils";
+import { updateClient, deleteClient } from "@/app/actions";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
@@ -18,21 +18,7 @@ const STAGE_BADGE: Record<ClientStage, { label: string; className: string }> = {
   lost: { label: "Lost", className: "bg-red-500/15 text-red-400" },
 };
 
-// When the lead/client landed in WorkCham (created_at), shown in the viewer's local time.
-function formatReceived(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-export function ClientCard({ client }: { client: Client }) {
+export function ClientCard({ client, now, isNew = false }: { client: Client; now?: string; isNew?: boolean }) {
   const [editing, setEditing] = useState(false);
 
   async function handleSave(formData: FormData) {
@@ -75,11 +61,6 @@ export function ClientCard({ client }: { client: Client }) {
   }
 
   const stage = STAGE_BADGE[client.stage] ?? STAGE_BADGE.lead;
-  const submittedLabel = formatReceived(client.submittedAt);
-  const receivedLabel = formatReceived(client.createdAt);
-  // Prefer the real form-submission time; fall back to when it entered WorkCham.
-  const dateLabel = submittedLabel ?? receivedLabel;
-  const datePrefix = submittedLabel ? "Submitted" : "Received";
 
   return (
     <Card className="transition-transform hover:-translate-y-0.5">
@@ -90,6 +71,9 @@ export function ClientCard({ client }: { client: Client }) {
             {client.company ? <p className="truncate text-xs text-muted-foreground">{client.company}</p> : null}
           </Link>
           <div className="flex shrink-0 items-center gap-2">
+            {isNew ? (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">New</span>
+            ) : null}
             <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", stage.className)}>{stage.label}</span>
             <button type="button" onClick={() => setEditing(true)} aria-label="Edit client" className="text-muted-foreground/60 transition hover:text-foreground">
               <Pencil className="h-3.5 w-3.5" />
@@ -108,44 +92,12 @@ export function ClientCard({ client }: { client: Client }) {
             </p>
           ) : null}
           {client.address ? <p className="whitespace-pre-line">{client.address}</p> : null}
-          {dateLabel ? (
-            <p suppressHydrationWarning className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3" /> {datePrefix} {dateLabel}
-            </p>
-          ) : null}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2">
-          <Link
-            href={`/clients/${client.id}`}
-            className="text-xs font-medium text-primary transition hover:underline"
-          >
+          <Link href={`/clients/${client.id}`} className="text-xs font-medium text-primary transition hover:underline">
             View customer →
           </Link>
-          {client.stage === "lead" ? (
-            <form action={setClientStage}>
-              <input type="hidden" name="id" value={client.id} />
-              <input type="hidden" name="stage" value="won" />
-              <button
-                type="submit"
-                title="Move this lead into your clients"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-              >
-                <UserCheck className="h-3.5 w-3.5" /> Move to client
-              </button>
-            </form>
-          ) : (
-            <form action={setClientStage}>
-              <input type="hidden" name="id" value={client.id} />
-              <input type="hidden" name="stage" value="lead" />
-              <button
-                type="submit"
-                title="Move this client back to your leads"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Undo2 className="h-3.5 w-3.5" /> Move to leads
-              </button>
-            </form>
-          )}
+          {client.createdAt ? <span className="text-xs text-muted-foreground">Added {timeAgo(client.createdAt, now)}</span> : null}
         </div>
       </CardContent>
     </Card>
