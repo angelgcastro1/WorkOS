@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,6 +23,8 @@ import {
   Sparkles,
   Users,
   Inbox,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/data";
@@ -49,6 +52,8 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const COLLAPSE_KEY = "workcham-sidebar-collapsed";
+
 type Props = {
   profile: Profile | null;
   children: ReactNode;
@@ -56,20 +61,68 @@ type Props = {
 
 export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the saved preference once on mount
+    setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+
   if (pathname === "/login" || pathname.startsWith("/invoice/") || pathname.startsWith("/intake/form")) return <>{children}</>;
+
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        // storage may be unavailable; the toggle still works for this session
+      }
+      return next;
+    });
+  }
 
   const initials = profile?.name?.trim()?.[0]?.toUpperCase() ?? "W";
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 md:flex">
-        <div className="flex items-center gap-2.5 px-2 pb-6 pt-1">
-          <BrandMark height={36} className="shadow-lg shadow-indigo-500/20" />
-          <div>
-            <p className="text-[15px] font-bold leading-none">WorkCham</p>
-            <p className="text-[11px] text-muted-foreground">Personal command center</p>
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-sidebar transition-all duration-200 md:flex",
+          collapsed ? "w-[76px] p-3" : "w-64 p-4",
+        )}
+      >
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2 pb-6 pt-1">
+            <BrandMark height={34} className="shadow-lg shadow-indigo-500/20" />
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2.5 px-2 pb-6 pt-1">
+            <BrandMark height={36} className="shadow-lg shadow-indigo-500/20" />
+            <div className="min-w-0">
+              <p className="text-[15px] font-bold leading-none">WorkCham</p>
+              <p className="text-[11px] text-muted-foreground">Personal command center</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         <nav className="flex flex-col gap-1">
           {nav.map((item) => {
@@ -79,39 +132,53 @@ export function AppShell({ profile, children }: Props) {
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  "flex items-center rounded-lg text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2",
+                  active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Icon className="h-[18px] w-[18px]" />
-                {item.label}
+                <Icon className="h-[18px] w-[18px] shrink-0" />
+                {collapsed ? null : item.label}
               </Link>
             );
           })}
         </nav>
 
         <div className="mt-auto space-y-2">
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-              {initials}
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials}</div>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  aria-label="Sign out"
+                  title="Sign out"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </form>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{profile?.name ?? "You"}</p>
-              <p className="truncate text-xs text-muted-foreground">{profile?.role ?? "Member"}</p>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials}</div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{profile?.name ?? "You"}</p>
+                <p className="truncate text-xs text-muted-foreground">{profile?.role ?? "Member"}</p>
+              </div>
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  aria-label="Sign out"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </form>
             </div>
-            <form action={signOut}>
-              <button
-                type="submit"
-                aria-label="Sign out"
-                className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </form>
-          </div>
+          )}
         </div>
       </aside>
 
