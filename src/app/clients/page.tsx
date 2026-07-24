@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus, ArrowLeft } from "lucide-react";
-import { getWorkspace } from "@/lib/queries";
+import { getWorkspace, getIntakeSubmissions } from "@/lib/queries";
 import { addClient } from "@/app/actions";
 import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -11,8 +11,9 @@ const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ClientsPage() {
-  const { clients } = await getWorkspace();
-  const nowIso = new Date().toISOString();
+  const [workspace, intake] = await Promise.all([getWorkspace(), getIntakeSubmissions()]);
+  const clients = workspace.clients;
+  const intakeClientIds = intake.map((s) => s.clientId).filter((cid): cid is string => Boolean(cid));
   const newSince = new Date();
   newSince.setDate(newSince.getDate() - 1);
   const newSinceIso = newSince.toISOString();
@@ -43,7 +44,7 @@ export default async function ClientsPage() {
         </form>
       </Card>
 
-      <ClientsBrowser clients={clients} nowIso={nowIso} newSince={newSinceIso} />
+      <ClientsBrowser clients={clients} newSince={newSinceIso} intakeClientIds={intakeClientIds} />
     </div>
   );
 }

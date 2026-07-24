@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Mail, Phone } from "lucide-react";
+import { Pencil, Trash2, Mail, Phone, Clock, UserCheck } from "lucide-react";
 import type { Client, ClientStage } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui";
-import { cn, timeAgo } from "@/lib/utils";
-import { updateClient, deleteClient } from "@/app/actions";
+import { cn } from "@/lib/utils";
+import { updateClient, deleteClient, setClientStage } from "@/app/actions";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
@@ -18,7 +18,14 @@ const STAGE_BADGE: Record<ClientStage, { label: string; className: string }> = {
   lost: { label: "Lost", className: "bg-red-500/15 text-red-400" },
 };
 
-export function ClientCard({ client, now, isNew = false }: { client: Client; now?: string; isNew?: boolean }) {
+type Props = {
+  client: Client;
+  isNew?: boolean;
+  intakeSubmitted?: boolean;
+  canMove?: boolean;
+};
+
+export function ClientCard({ client, isNew = false, intakeSubmitted = false, canMove = false }: Props) {
   const [editing, setEditing] = useState(false);
 
   async function handleSave(formData: FormData) {
@@ -61,6 +68,16 @@ export function ClientCard({ client, now, isNew = false }: { client: Client; now
   }
 
   const stage = STAGE_BADGE[client.stage] ?? STAGE_BADGE.lead;
+  const addedLabel = intakeSubmitted ? "Submitted" : "Received";
+  const addedAt = client.createdAt
+    ? new Date(client.createdAt).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
 
   return (
     <Card className="transition-transform hover:-translate-y-0.5">
@@ -91,13 +108,29 @@ export function ClientCard({ client, now, isNew = false }: { client: Client; now
               <Phone className="h-3 w-3" /> {client.phone}
             </p>
           ) : null}
+          {client.createdAt ? (
+            <p className="flex items-center gap-1.5" suppressHydrationWarning>
+              <Clock className="h-3 w-3" /> {addedLabel} {addedAt}
+            </p>
+          ) : null}
           {client.address ? <p className="whitespace-pre-line">{client.address}</p> : null}
         </div>
         <div className="mt-3 flex items-center justify-between gap-2">
           <Link href={`/clients/${client.id}`} className="text-xs font-medium text-primary transition hover:underline">
             View customer →
           </Link>
-          {client.createdAt ? <span className="text-xs text-muted-foreground">Added {timeAgo(client.createdAt, now)}</span> : null}
+          {canMove ? (
+            <form action={setClientStage}>
+              <input type="hidden" name="id" value={client.id} />
+              <input type="hidden" name="stage" value="won" />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/20"
+              >
+                <UserCheck className="h-3.5 w-3.5" /> Move to client
+              </button>
+            </form>
+          ) : null}
         </div>
       </CardContent>
     </Card>
