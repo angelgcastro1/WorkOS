@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { BrandMark } from "@/components/brand-mark";
 
 type DueItem = { id: string; title: string };
 
@@ -31,6 +30,8 @@ function latestDueMs(reminderIso: string, rule: string, nowMs: number): number |
 
 export function ReminderAlerts() {
   const [toasts, setToasts] = useState<DueItem[]>([]);
+  // The mascot stays hidden until its animation has loaded, so it starts walking in sync.
+  const [chamReady, setChamReady] = useState(false);
   // id -> last time (ms) we surfaced it; used to re-nag every RENAG_MS.
   const lastShown = useRef<Map<string, number>>(new Map());
 
@@ -121,8 +122,19 @@ export function ReminderAlerts() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
-      <div className="pointer-events-none z-10 -mb-2.5 ml-4 flex">
-        <BrandMark height={40} alt="WorkCham" className="reminder-cham drop-shadow-lg" />
+      <div className="pointer-events-none z-10 -mb-3 flex">
+        {/* Angel's chameleon animation — full choreography, transparent animated WebP.
+            It only starts walking once the clip has loaded, so the CSS travel path
+            stays in step with the animation's own turns. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/cham-walk.webp"
+          alt=""
+          width={176}
+          height={101}
+          onLoad={() => setChamReady(true)}
+          className={`reminder-cham drop-shadow-lg${chamReady ? " is-walking" : ""}`}
+        />
       </div>
       {toasts.map((r) => (
         <div key={r.id} className="reminder-toast flex items-start gap-3 rounded-xl border border-primary/40 bg-card p-3 shadow-lg shadow-indigo-500/20">

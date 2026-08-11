@@ -141,29 +141,27 @@
 }
 .bell-ring { animation: bell-ring 1.5s ease-in-out infinite; transform-origin: top center; }
 
-/* Reminder chameleon mascot — crawls back and forth along the top of the box */
+/* Reminder chameleon mascot — Angel's full walking animation (transparent WebP,
+   15.833s: walk right, turn, walk left, turn, stand up arms-crossed, walk right).
+   cham-walk-path re-creates that same journey as real travel across the top of the
+   toast, so the clip's phases and the movement stay in step (linear, same duration). */
 @keyframes cham-enter {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
-@keyframes cham-crawl {
-  0%   { transform: translateX(0)     translateY(0)    rotate(0deg)  scaleX(1); }
-  8%   { transform: translateX(24px)  translateY(-3px) rotate(-4deg) scaleX(1); }
-  16%  { transform: translateX(48px)  translateY(0)    rotate(0deg)  scaleX(1); }
-  26%  { transform: translateX(96px)  translateY(-3px) rotate(-4deg) scaleX(1); }
-  36%  { transform: translateX(150px) translateY(0)    rotate(0deg)  scaleX(1); }
-  44%  { transform: translateX(210px) translateY(-3px) rotate(-4deg) scaleX(1); }
-  48%  { transform: translateX(238px) translateY(0)    rotate(0deg)  scaleX(1); }
-  50%  { transform: translateX(238px) translateY(0)    rotate(0deg)  scaleX(-1); }
-  58%  { transform: translateX(200px) translateY(-3px) rotate(4deg)  scaleX(-1); }
-  66%  { transform: translateX(150px) translateY(0)    rotate(0deg)  scaleX(-1); }
-  76%  { transform: translateX(96px)  translateY(-3px) rotate(4deg)  scaleX(-1); }
-  86%  { transform: translateX(48px)  translateY(0)    rotate(0deg)  scaleX(-1); }
-  94%  { transform: translateX(14px)  translateY(-3px) rotate(4deg)  scaleX(-1); }
-  98%  { transform: translateX(0)     translateY(0)    rotate(0deg)  scaleX(-1); }
-  100% { transform: translateX(0)     translateY(0)    rotate(0deg)  scaleX(1); }
+@keyframes cham-walk-path {
+  0%     { transform: translateX(42px); }   /* mid-stride, heading right   */
+  25.8%  { transform: translateX(144px); }  /* reaches the right edge      */
+  29.5%  { transform: translateX(144px); }  /* turns around on the spot    */
+  57.9%  { transform: translateX(0); }      /* walks back to the left edge */
+  89.5%  { transform: translateX(0); }      /* turns, stands up, sits back */
+  100%   { transform: translateX(42px); }   /* heads right again, loops    */
 }
 .reminder-cham {
-  transform-origin: bottom center;
-  animation: cham-enter 0.5s ease-out, cham-crawl 9s ease-in-out infinite;
+  width: 176px;
+  height: 101px;
+  opacity: 0;
+}
+.reminder-cham.is-walking {
+  animation: cham-enter 0.6s ease-out both, cham-walk-path 15.833s linear infinite;
 }
