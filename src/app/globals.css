@@ -133,6 +133,10 @@
   94% { transform: translateY(0); }
 }
 .reminder-toast { animation: reminder-nudge 3.5s ease-in-out infinite; }
+/* The mascot row runs the identical nudge, so the chameleon hops with the box
+   instead of the box sliding out from under his feet. Keeping the hop on the
+   row and the walk on the image itself lets both transforms apply at once. */
+.reminder-cham-row { animation: reminder-nudge 3.5s ease-in-out infinite; }
 
 @keyframes bell-ring {
   0%, 65%, 100% { transform: rotate(0); }

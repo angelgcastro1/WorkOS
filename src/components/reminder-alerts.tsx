@@ -122,7 +122,8 @@ export function ReminderAlerts() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
-      <div className="pointer-events-none z-10 -mb-3 flex">
+      {/* reminder-cham-row rides the same nudge as the toast, so the chameleon stays planted on its edge. */}
+      <div className="reminder-cham-row pointer-events-none z-10 -mb-3 flex">
         {/* Angel's chameleon animation — full choreography, transparent animated WebP.
             It only starts walking once the clip has loaded, so the CSS travel path
             stays in step with the animation's own turns. */}
