@@ -19,7 +19,8 @@ import { deriveKpis, weeklyCompleted, tasksByStatus } from "@/lib/metrics";
 import { toggleTask, seedSampleData } from "@/app/actions";
 import { cn, formatMoney, formatDate, daysUntil } from "@/lib/utils";
 
-type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foot?: string };
+// `href` sends each dashboard card to the section it summarises.
+type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foot?: string; href: string };
 
 export default async function DashboardPage() {
   const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
@@ -51,12 +52,12 @@ export default async function DashboardPage() {
 
   const kpi = deriveKpis(workspace);
   const kpis: Kpi[] = [
-    { label: "Open tasks", value: String(kpi.openTasks), icon: ListTodo, accent: "text-indigo-400 bg-indigo-500/10", foot: `${kpi.overdue} overdue` },
-    { label: "Done · 7 days", value: String(kpi.doneThisWeek), icon: Check, accent: "text-emerald-400 bg-emerald-500/10", foot: "this week" },
-    { label: "Active projects", value: String(kpi.activeProjects), icon: Folder, accent: "text-violet-400 bg-violet-500/10", foot: `${projects.length} total` },
-    { label: "Overdue", value: String(kpi.overdue), icon: Flag, accent: "text-red-400 bg-red-500/10", foot: kpi.overdue ? "needs attention" : "all clear" },
-    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), icon: DollarSign, accent: "text-emerald-400 bg-emerald-500/10", foot: `${formatMoney(kpi.outstanding)} outstanding` },
-    { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews` },
+    { label: "Open tasks", value: String(kpi.openTasks), icon: ListTodo, accent: "text-indigo-400 bg-indigo-500/10", foot: `${kpi.overdue} overdue`, href: "/tasks" },
+    { label: "Done · 7 days", value: String(kpi.doneThisWeek), icon: Check, accent: "text-emerald-400 bg-emerald-500/10", foot: "this week", href: "/tasks" },
+    { label: "Active projects", value: String(kpi.activeProjects), icon: Folder, accent: "text-violet-400 bg-violet-500/10", foot: `${projects.length} total`, href: "/projects" },
+    { label: "Overdue", value: String(kpi.overdue), icon: Flag, accent: "text-red-400 bg-red-500/10", foot: kpi.overdue ? "needs attention" : "all clear", href: "/tasks" },
+    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), icon: DollarSign, accent: "text-emerald-400 bg-emerald-500/10", foot: `${formatMoney(kpi.outstanding)} outstanding`, href: "/invoices" },
+    { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews`, href: "/jobs" },
   ];
 
   const activeProjects = projects.filter((p) => p.status === "active" || p.status === "planning");
@@ -106,18 +107,25 @@ export default async function DashboardPage() {
         {kpis.map((k) => {
           const Icon = k.icon;
           return (
-            <Card key={k.label} className="animate-fade-up">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">{k.label}</span>
-                  <span className={cn("grid h-8 w-8 place-items-center rounded-lg", k.accent)}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{k.value}</p>
-                {k.foot ? <p className="mt-0.5 text-xs text-muted-foreground">{k.foot}</p> : null}
-              </CardContent>
-            </Card>
+            <Link
+              key={k.label}
+              href={k.href}
+              aria-label={`${k.label} — open ${k.href === "/" ? "dashboard" : k.href.slice(1)}`}
+              className="group rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <Card className="animate-fade-up h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/50 group-hover:shadow-md group-hover:shadow-indigo-500/10">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">{k.label}</span>
+                    <span className={cn("grid h-8 w-8 place-items-center rounded-lg transition group-hover:scale-110", k.accent)}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{k.value}</p>
+                  {k.foot ? <p className="mt-0.5 text-xs text-muted-foreground">{k.foot}</p> : null}
+                </CardContent>
+              </Card>
+            </Link>
           );
         })}
       </section>
