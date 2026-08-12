@@ -127,13 +127,13 @@ export function ReminderAlerts() {
         {/* The blacked-out twin behind him — same clip, so it never falls out of step. */}
         <span aria-hidden className={`reminder-cham-shadow${chamReady ? " is-walking" : ""}`} />
         {/* Angel's chameleon animation — full choreography, transparent animated WebP.
-            It only starts walking once the clip has loaded, so the CSS travel path
-            stays in step with the animation's own turns. */}
+            The walk across the box is baked into the clip, so there is no second
+            animation that can drift out of step with it. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/cham-walk.webp"
           alt=""
-          width={176}
+          width={320}
           height={101}
           onLoad={() => setChamReady(true)}
           className={`reminder-cham drop-shadow-lg${chamReady ? " is-walking" : ""}`}

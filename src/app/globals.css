@@ -145,42 +145,30 @@
 }
 .bell-ring { animation: bell-ring 1.5s ease-in-out infinite; transform-origin: top center; }
 
-/* Reminder chameleon mascot — Angel's full walking animation (transparent WebP,
-   15.833s: walk right, turn, walk left, turn, stand up arms-crossed, walk right).
-   cham-walk-path re-creates that same journey as real travel across the top of the
-   toast, so the clip's phases and the movement stay in step (linear, same duration). */
+/* Reminder chameleon mascot — Angel's animation (15.833s: walk right, turn, walk left,
+   turn, stand up arms-crossed, walk right). The travel across the top of the toast is
+   baked into the clip itself, frame by frame. It used to be a CSS transform, but a CSS
+   animation and an animated image are driven by two different clocks: the image lost
+   roughly a frame a minute, and a backgrounded tab pauses one and not the other, so
+   after a while he was walking one way and sliding the other. One clip = nothing to
+   drift. The only CSS left on him is the fade-in. */
 @keyframes cham-enter {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-@keyframes cham-walk-path {
-  0%     { transform: translateX(42px); }   /* mid-stride, heading right   */
-  25.8%  { transform: translateX(144px); }  /* reaches the right edge      */
-  29.5%  { transform: translateX(144px); }  /* turns around on the spot    */
-  57.9%  { transform: translateX(0); }      /* walks back to the left edge */
-  89.5%  { transform: translateX(0); }      /* turns, stands up, sits back */
-  100%   { transform: translateX(42px); }   /* heads right again, loops    */
-}
 .reminder-cham {
-  width: 176px;
+  position: relative;
+  z-index: 2;
+  width: 320px;
   height: 101px;
   opacity: 0;
 }
 .reminder-cham.is-walking {
-  animation: cham-enter 0.6s ease-out both, cham-walk-path 15.833s linear infinite;
+  animation: cham-enter 0.6s ease-out both;
 }
 
-/* Shadow twin — the same clip, blacked out and set behind him, as if the light were
-   in front. Browsers share one animation timeline per image file, so it strikes the
-   exact pose he does, always. Dark theme only: on the light theme it reads as grime. */
-@keyframes cham-walk-path-shadow {
-  0%     { transform: translateX(42px)  scale(1.03); }
-  25.8%  { transform: translateX(144px) scale(1.03); }
-  29.5%  { transform: translateX(144px) scale(1.03); }
-  57.9%  { transform: translateX(0)     scale(1.03); }
-  89.5%  { transform: translateX(0)     scale(1.03); }
-  100%   { transform: translateX(42px)  scale(1.03); }
-}
+/* Shadow twin — the same file, blacked out and set behind him, as if the light were in
+   front. Same image means the same frame, always. Dark theme only. */
 .reminder-cham-shadow { display: none; }
 .dark .reminder-cham-shadow {
   display: block;
@@ -188,14 +176,14 @@
   left: -29px;
   top: -1px;
   z-index: 1;
-  width: 176px;
+  width: 320px;
   height: 101px;
+  transform: scale(1.03);
   transform-origin: bottom center;
   background: url("/cham-walk.webp") no-repeat center / contain;
   filter: brightness(0) blur(5px) opacity(0.51);
   opacity: 0;
 }
 .dark .reminder-cham-shadow.is-walking {
-  animation: cham-enter 0.6s ease-out both, cham-walk-path-shadow 15.833s linear infinite;
+  animation: cham-enter 0.6s ease-out both;
 }
-.reminder-cham { position: relative; z-index: 2; }
