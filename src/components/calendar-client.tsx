@@ -320,7 +320,10 @@ function Chip({ item, onOpen, onHover, onHoverOut, onDragStartEvent }: { item: D
       onDragStart={item.event ? () => onDragStartEvent?.(item.event!.id) : undefined}
       onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHoverOut}
-      onDoubleClick={() => onOpen(item)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOpen(item);
+      }}
       className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.event && "cursor-grab active:cursor-grabbing", item.color)}
     >
       <span className="flex items-center gap-1 truncate">
@@ -337,7 +340,10 @@ function Row({ item, onOpen, onHover, onHoverOut }: { item: DayItem } & ItemHand
     <button
       onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHoverOut}
-      onDoubleClick={() => onOpen(item)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOpen(item);
+      }}
       className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition hover:bg-muted"
     >
       <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">{item.time ? fmtTime(item.time) : "all day"}</span>
@@ -369,10 +375,21 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
           const shown = items.slice(0, 3);
           const extra = items.length - shown.length;
           return (
-            <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("min-h-24 border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/20")}>
+            <div
+              key={iso}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => onDropDate(iso)}
+              onDoubleClick={() => onAdd(iso)}
+              title="Double-click to add an event"
+              className={cn(
+                "min-h-24 select-none border-b border-r border-border p-1 transition last:border-r-0 hover:bg-muted/40",
+                !inMonth && "bg-muted/20",
+              )}
+            >
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => onAdd(iso)}
+                  onDoubleClick={(e) => e.stopPropagation()}
                   className={cn("grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs transition hover:bg-muted", isToday ? "bg-primary font-bold text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/50")}
                   aria-label={`Add event on ${iso}`}
                 >
@@ -384,7 +401,7 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
                   <Chip key={it.key} item={it} onOpen={onOpen} onHover={onHover} onHoverOut={onHoverOut} onDragStartEvent={onDragStartEvent} />
                 ))}
                 {extra > 0 ? (
-                  <button onClick={() => onMore(iso)} className="w-full rounded px-1.5 text-left text-[11px] text-muted-foreground transition hover:text-foreground">+{extra} more</button>
+                  <button onClick={() => onMore(iso)} onDoubleClick={(e) => e.stopPropagation()} className="w-full rounded px-1.5 text-left text-[11px] text-muted-foreground transition hover:text-foreground">+{extra} more</button>
                 ) : null}
               </div>
             </div>
@@ -406,12 +423,19 @@ function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut,
         const isToday = iso === todayIso;
         const items = itemsForDate(iso);
         return (
-          <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
+          <div
+            key={iso}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => onDropDate(iso)}
+            onDoubleClick={() => onAdd(iso)}
+            title="Double-click to add an event"
+            className={cn("select-none rounded-xl border border-border p-2 transition hover:bg-muted/40", isToday && "border-primary/50 bg-primary/5")}
+          >
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs">
                 <span className="text-muted-foreground">{WEEKDAYS[weekdayOf(iso)]}</span> <span className={cn("font-semibold", isToday && "text-primary")}>{parseIso(iso).d}</span>
               </div>
-              <button onClick={() => onAdd(iso)} aria-label={`Add event on ${iso}`} className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground">
+              <button onClick={() => onAdd(iso)} onDoubleClick={(e) => e.stopPropagation()} aria-label={`Add event on ${iso}`} className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground">
                 <Plus className="h-3.5 w-3.5" />
               </button>
             </div>
