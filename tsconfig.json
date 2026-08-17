@@ -30,5 +30,6 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "//": "supabase-functions holds Deno code for Supabase Edge Functions. It is kept in the repo for backup and history, but it is NOT part of the Next.js app and must not be type-checked or linted with it.",
+  "exclude": ["node_modules", "supabase-functions"]
 }
