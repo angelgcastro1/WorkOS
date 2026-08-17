@@ -423,6 +423,15 @@ export async function addClientNote(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function updateClientNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  const body = str(formData.get("body"));
+  if (!id || !body) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").update({ body }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function deleteClientNote(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;
