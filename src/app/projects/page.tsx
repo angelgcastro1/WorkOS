@@ -9,7 +9,7 @@ const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ProjectsPage() {
-  const { projects, clients } = await getWorkspace();
+  const { projects, clients, tasks } = await getWorkspace();
   const active = projects.filter((p) => p.status === "active").length;
 
   return (
@@ -17,7 +17,7 @@ export default async function ProjectsPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
         <p className="text-sm text-muted-foreground">
-          {projects.length} projects · {active} active · click the task count on a card to see and add its tasks
+          {projects.length} projects · {active} active · each card holds its own task list
         </p>
       </header>
 
@@ -66,7 +66,7 @@ export default async function ProjectsPage() {
           {projects.map((p) => (
             // The anchor lets a task card link straight back to its project.
             <div key={p.id} id={`project-${p.id}`} className="scroll-mt-24">
-              <ProjectCard project={p} />
+              <ProjectCard project={p} tasks={tasks.filter((t) => t.projectId === p.id)} />
             </div>
           ))}
         </div>
