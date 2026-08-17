@@ -9,6 +9,7 @@ import {
   COLOUR_MODE_KEY,
   COLOUR_MODE_LABEL,
   DIM_DONE_KEY,
+  isClosed,
   sortProjects,
   spineColour,
   type ProjectColourMode,
@@ -111,7 +112,7 @@ export function ProjectWall({ projects, tasks }: { projects: Project[]; tasks: T
                 project={p}
                 tasks={tasks.filter((t) => t.projectId === p.id)}
                 spine={spineColour(p, mode)}
-                dimmed={dimDone && p.status === "done"}
+                dimmed={dimDone && isClosed(p)}
               />
             </div>
           ))}

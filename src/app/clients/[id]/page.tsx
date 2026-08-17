@@ -35,11 +35,15 @@ const DOC_BADGE: Record<string, string> = {
 };
 
 const PROJECT_BADGE: Record<string, string> = {
-  planning: "bg-slate-500/15 text-slate-400",
-  active: "bg-blue-500/15 text-blue-400",
-  on_hold: "bg-amber-500/15 text-amber-400",
-  done: "bg-emerald-500/15 text-emerald-400",
-  completed: "bg-emerald-500/15 text-emerald-400",
+  planning: "bg-violet-500/15 text-violet-400",
+  active: "bg-emerald-500/15 text-emerald-400",
+  in_progress: "bg-sky-500/15 text-sky-400",
+  in_review: "bg-cyan-500/15 text-cyan-400",
+  waiting_client: "bg-amber-500/15 text-amber-400",
+  on_hold: "bg-orange-500/15 text-orange-400",
+  done: "bg-slate-500/15 text-slate-400",
+  cancelled: "bg-red-500/15 text-red-400",
+  completed: "bg-slate-500/15 text-slate-400",
 };
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {

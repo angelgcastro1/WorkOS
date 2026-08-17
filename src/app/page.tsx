@@ -12,6 +12,7 @@ import {
   priorityLabel,
   projectStatusBadge,
   projectStatusLabel,
+  LIVE_PROJECT_STATUSES,
 } from "@/components/ui";
 import { WeeklyTrend, StatusDonut } from "@/components/charts";
 import { getWorkspace, getProfile } from "@/lib/queries";
@@ -60,12 +61,12 @@ export default async function DashboardPage() {
     { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews`, href: "/jobs" },
   ];
 
-  const activeProjects = projects.filter((p) => p.status === "active" || p.status === "planning");
+  const activeProjects = projects.filter((p) => LIVE_PROJECT_STATUSES.includes(p.status));
   const todays = tasks
     .filter((t) => t.status !== "done" && t.due && (daysUntil(t.due) ?? 99) <= 0)
     .sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
   const upcoming = [...projects]
-    .filter((p) => p.status !== "done" && p.deadline)
+    .filter((p) => p.status !== "done" && p.status !== "cancelled" && p.deadline)
     .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
     .slice(0, 4);
   const recentNotes = notes.slice(0, 4);

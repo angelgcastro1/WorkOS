@@ -3,7 +3,15 @@
 
 export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";
 export type Priority = "low" | "medium" | "high" | "urgent";
-export type ProjectStatus = "planning" | "active" | "on_hold" | "done";
+export type ProjectStatus =
+  | "planning"
+  | "active"
+  | "in_progress"
+  | "in_review"
+  | "waiting_client"
+  | "on_hold"
+  | "done"
+  | "cancelled";
 export type NoteType = "Idea" | "Meeting" | "Client" | "SOP" | "Prompt" | "Note";
 export type ApplicationStage = "applied" | "screening" | "interview" | "offer" | "rejected";
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "accepted" | "declined";
@@ -57,6 +65,10 @@ export interface Attachment {
   mime: string | null;
   size: number | null;
   createdAt: string | null;
+  /** Voice notes only: length, waveform peaks (0-1) and any transcript. */
+  durationSeconds: number | null;
+  peaks: number[] | null;
+  transcript: string | null;
 }
 
 export interface Note {

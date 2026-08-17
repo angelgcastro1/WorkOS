@@ -17,7 +17,7 @@ const PRIORITY_COLOUR: Record<string, string> = {
 
 /** Overdue red · within a week amber · this month blue · further out green. */
 function deadlineColour(project: Project): string | null {
-  if (project.status === "done") return "#9ca3af";
+  if (isClosed(project)) return "#9ca3af";
   const days = daysUntil(project.deadline);
   if (days === null) return null;
   if (days < 0) return "#ef4444";
@@ -32,6 +32,11 @@ export function spineColour(project: Project, mode: ProjectColourMode): string |
   return deadlineColour(project);
 }
 
+/** Finished or cancelled — off your plate either way. */
+export function isClosed(project: Project): boolean {
+  return project.status === "done" || project.status === "cancelled";
+}
+
 const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 /** Sorting follows the colouring, so the wall reads top-left to bottom-right. */
@@ -40,9 +45,9 @@ export function sortProjects(projects: Project[], mode: ProjectColourMode): Proj
   if (mode === "none") return copy;
 
   return copy.sort((a, b) => {
-    // Finished work always sinks to the bottom.
-    const doneA = a.status === "done" ? 1 : 0;
-    const doneB = b.status === "done" ? 1 : 0;
+    // Finished and cancelled work always sinks to the bottom.
+    const doneA = isClosed(a) ? 1 : 0;
+    const doneB = isClosed(b) ? 1 : 0;
     if (doneA !== doneB) return doneA - doneB;
 
     if (mode === "priority") {

@@ -8,6 +8,7 @@ import { Card, Badge } from "@/components/ui";
 import { cn, formatDate } from "@/lib/utils";
 import { updateNote, deleteNote } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
+import { VoiceNoteCard, VoiceNoteRecorder } from "@/components/voice-note";
 
 const noteTypeStyle: Record<NoteType, string> = {
   Idea: "bg-amber-500/15 text-amber-400",
@@ -28,11 +29,13 @@ function formatSize(bytes: number | null): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-type Props = { note: Note; projects: { id: string; name: string }[]; userId: string };
+type Props = { note: Note; projects: { id: string; name: string }[]; userId: string; canTranscribe?: boolean };
 
-export function NoteCard({ note, projects, userId }: Props) {
+export function NoteCard({ note, projects, userId, canTranscribe = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Controlled so a transcript can drop straight into the text you are writing.
+  const [body, setBody] = useState(note.body ?? "");
   const [supabase] = useState(() => createClient());
   const router = useRouter();
 
@@ -66,6 +69,14 @@ export function NoteCard({ note, projects, userId }: Props) {
     setEditing(false);
   }
 
+  /** Drop spoken text at the end of the note, on its own line. */
+  function absorbTranscript(text: string) {
+    setBody((prev) => (prev.trim() ? `${prev.replace(/\s+$/, "")}\n\n${text}` : text));
+  }
+
+  const recordings = note.attachments.filter((a) => (a.mime ?? "").startsWith("audio/"));
+  const files = note.attachments.filter((a) => !(a.mime ?? "").startsWith("audio/"));
+
   if (editing) {
     return (
       <Card className="mb-4 break-inside-avoid p-4">
@@ -90,7 +101,14 @@ export function NoteCard({ note, projects, userId }: Props) {
               ))}
             </select>
           </div>
-          <textarea name="body" defaultValue={note.body ?? ""} rows={4} className={cn(fieldClass, "resize-y")} placeholder="Write your note…" />
+          <textarea
+            name="body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={4}
+            className={cn(fieldClass, "resize-y")}
+            placeholder="Write your note…"
+          />
           <div className="flex items-center gap-2 pt-1">
             <button
               type="submit"
@@ -106,9 +124,9 @@ export function NoteCard({ note, projects, userId }: Props) {
 
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           <p className="text-xs font-medium text-muted-foreground">Attachments</p>
-          {note.attachments.length > 0 ? (
+          {files.length > 0 ? (
             <div className="space-y-1.5">
-              {note.attachments.map((att) => (
+              {files.map((att) => (
                 <div key={att.id} className="flex items-center gap-2 text-sm">
                   <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <button type="button" onClick={() => handleDownload(att)} className="min-w-0 flex-1 truncate text-left hover:text-primary">
@@ -126,6 +144,17 @@ export function NoteCard({ note, projects, userId }: Props) {
             <Paperclip className="h-3.5 w-3.5" /> {uploading ? "Uploading…" : "Attach file"}
             <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
           </label>
+        </div>
+
+        <div className="mt-3 space-y-2 border-t border-border pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Voice notes</p>
+          {recordings.map((att) => (
+            <VoiceNoteCard key={att.id} attachment={att} canTranscribe={canTranscribe} onTranscript={absorbTranscript} />
+          ))}
+          <VoiceNoteRecorder noteId={note.id} userId={userId} onTranscript={absorbTranscript} />
+          <p className="text-[11px] text-muted-foreground/70">
+            Speak and the words appear in the note as you go. The recording is saved with it.
+          </p>
         </div>
 
         <form action={deleteNote} className="mt-2 border-t border-border pt-2">

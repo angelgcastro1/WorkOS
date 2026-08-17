@@ -69,12 +69,24 @@ export const taskStatusMeta: Record<TaskStatus, { label: string; dot: string }> 
 export const projectStatusBadge: Record<ProjectStatus, string> = {
   planning: "bg-violet-500/15 text-violet-400",
   active: "bg-emerald-500/15 text-emerald-400",
-  on_hold: "bg-amber-500/15 text-amber-500",
+  in_progress: "bg-sky-500/15 text-sky-400",
+  in_review: "bg-cyan-500/15 text-cyan-400",
+  waiting_client: "bg-amber-500/15 text-amber-400",
+  on_hold: "bg-orange-500/15 text-orange-400",
   done: "bg-slate-500/15 text-slate-400",
+  cancelled: "bg-red-500/15 text-red-400",
 };
 export const projectStatusLabel: Record<ProjectStatus, string> = {
   planning: "Planning",
   active: "Active",
+  in_progress: "In progress",
+  in_review: "In review",
+  waiting_client: "Waiting on client",
   on_hold: "On hold",
   done: "Done",
+  cancelled: "Cancelled",
 };
+/** Statuses that mean the project still needs your attention. */
+export const LIVE_PROJECT_STATUSES: ProjectStatus[] = ["planning", "active", "in_progress", "in_review", "waiting_client"];
+/** Statuses that mean it is off your plate. */
+export const CLOSED_PROJECT_STATUSES: ProjectStatus[] = ["done", "cancelled"];

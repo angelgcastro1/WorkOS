@@ -53,8 +53,12 @@ export function ProjectCard({
               <select name="status" defaultValue={project.status} className={fieldClass} aria-label="Status">
                 <option value="planning">Planning</option>
                 <option value="active">Active</option>
+                <option value="in_progress">In progress</option>
+                <option value="in_review">In review</option>
+                <option value="waiting_client">Waiting on client</option>
                 <option value="on_hold">On hold</option>
                 <option value="done">Done</option>
+                <option value="cancelled">Cancelled</option>
               </select>
               <select name="priority" defaultValue={project.priority} className={fieldClass} aria-label="Priority">
                 <option value="urgent">Urgent</option>
