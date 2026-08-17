@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Calendar } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Trash2, Calendar, ListTodo } from "lucide-react";
 import type { Project } from "@/lib/data";
 import {
   Card,
@@ -97,9 +98,14 @@ export function ProjectCard({ project }: { project: Project }) {
         </div>
         <div>
           <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
-            <span>
+            <Link
+              href={`/tasks?project=${project.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 -mx-1.5 font-medium text-primary transition hover:bg-primary/10"
+              title="See and add tasks for this project"
+            >
+              <ListTodo className="h-3.5 w-3.5" />
               {project.tasksDone}/{project.tasksTotal} tasks
-            </span>
+            </Link>
             <span>{project.progress}%</span>
           </div>
           <Progress value={project.progress} />

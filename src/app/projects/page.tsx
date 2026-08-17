@@ -17,7 +17,7 @@ export default async function ProjectsPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
         <p className="text-sm text-muted-foreground">
-          {projects.length} projects · {active} active · click the pencil on any card to edit
+          {projects.length} projects · {active} active · click the task count on a card to see and add its tasks
         </p>
       </header>
 
@@ -64,7 +64,10 @@ export default async function ProjectsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((p) => (
-            <ProjectCard key={p.id} project={p} />
+            // The anchor lets a task card link straight back to its project.
+            <div key={p.id} id={`project-${p.id}`} className="scroll-mt-24">
+              <ProjectCard project={p} />
+            </div>
           ))}
         </div>
       )}

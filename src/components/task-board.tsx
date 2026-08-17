@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Check, Trash2, RotateCcw, Repeat, X } from "lucide-react";
 import type { Project, Task, TaskStatus } from "@/lib/data";
 import { setTaskStatus, deleteTask, updateTask } from "@/app/actions";
@@ -122,7 +123,20 @@ export function TaskBoard({ tasks, projects = [] }: { tasks: Task[]; projects?: 
                             {overdue ? `${Math.abs(days as number)}d late` : formatDate(t.due)}
                           </span>
                         ) : null}
-                        {t.project ? <span className="truncate text-xs text-muted-foreground">· {t.project}</span> : null}
+                        {t.project ? (
+                          t.projectId ? (
+                            <Link
+                              href={`/projects#project-${t.projectId}`}
+                              onDoubleClick={(e) => e.stopPropagation()}
+                              title="Open this project"
+                              className="truncate text-xs text-muted-foreground underline-offset-2 transition hover:text-primary hover:underline"
+                            >
+                              · {t.project}
+                            </Link>
+                          ) : (
+                            <span className="truncate text-xs text-muted-foreground">· {t.project}</span>
+                          )
+                        ) : null}
                       </div>
                     </div>
                   );
