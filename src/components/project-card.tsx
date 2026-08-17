@@ -20,7 +20,19 @@ import { updateProject, deleteProject, createTask, setTaskStatus } from "@/app/a
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
-export function ProjectCard({ project, tasks = [] }: { project: Project; tasks?: Task[] }) {
+export function ProjectCard({
+  project,
+  tasks = [],
+  spine = null,
+  dimmed = false,
+}: {
+  project: Project;
+  tasks?: Task[];
+  /** Colour of the bar down the left edge, or null for no bar. */
+  spine?: string | null;
+  /** Finished projects can be faded back so the live ones stand out. */
+  dimmed?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [showTasks, setShowTasks] = useState(true);
   const [showDone, setShowDone] = useState(false);
@@ -84,8 +96,14 @@ export function ProjectCard({ project, tasks = [] }: { project: Project; tasks?:
   const openTasks = tasks.filter((t) => t.status !== "done");
   const doneTasks = tasks.filter((t) => t.status === "done");
   return (
-    <Card className="animate-fade-up">
-      <CardContent className="space-y-3 p-5">
+    <Card
+      className={cn(
+        "animate-fade-up relative overflow-hidden transition",
+        dimmed && "opacity-50 hover:opacity-100",
+      )}
+    >
+      {spine ? <span aria-hidden className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: spine }} /> : null}
+      <CardContent className={cn("space-y-3 p-5", spine && "pl-6")}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-[15px] font-semibold leading-tight">{project.name}</h3>
           <div className="flex shrink-0 items-center gap-2">
