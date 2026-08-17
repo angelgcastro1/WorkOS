@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Trash2, RotateCcw, Repeat } from "lucide-react";
-import type { Task, TaskStatus } from "@/lib/data";
-import { setTaskStatus, deleteTask } from "@/app/actions";
+import { Check, Trash2, RotateCcw, Repeat, X } from "lucide-react";
+import type { Project, Task, TaskStatus } from "@/lib/data";
+import { setTaskStatus, deleteTask, updateTask } from "@/app/actions";
 import { Badge, priorityBadge, priorityLabel, taskStatusMeta } from "@/components/ui";
 import { cn, formatDate, daysUntil } from "@/lib/utils";
 
 const columns: TaskStatus[] = ["todo", "in_progress", "blocked", "done"];
 
-export function TaskBoard({ tasks }: { tasks: Task[] }) {
+export function TaskBoard({ tasks, projects = [] }: { tasks: Task[]; projects?: Project[] }) {
   const [overrides, setOverrides] = useState<Record<string, TaskStatus>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<TaskStatus | null>(null);
+  // The task being edited, opened by double-clicking its card.
+  const [editing, setEditing] = useState<Task | null>(null);
 
   const statusOf = (t: Task): TaskStatus => overrides[t.id] ?? t.status;
 
@@ -32,9 +34,18 @@ export function TaskBoard({ tasks }: { tasks: Task[] }) {
     await deleteTask(fd);
   }
 
+  async function saveEdit(formData: FormData) {
+    await updateTask(formData);
+    const nextStatus = String(formData.get("status") ?? "") as TaskStatus;
+    const id = String(formData.get("id") ?? "");
+    if (id && nextStatus) setOverrides((p) => ({ ...p, [id]: nextStatus }));
+    setEditing(null);
+  }
+
   const visible = tasks.filter((t) => !deleted.has(t.id));
 
   return (
+    <>
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {columns.map((col) => {
         const items = visible.filter((t) => statusOf(t) === col);
@@ -74,8 +85,10 @@ export function TaskBoard({ tasks }: { tasks: Task[] }) {
                       draggable
                       onDragStart={() => setDragId(t.id)}
                       onDragEnd={() => setDragId(null)}
+                      onDoubleClick={() => setEditing(t)}
+                      title="Double-click to edit"
                       className={cn(
-                        "cursor-grab rounded-xl border border-border bg-card p-3 shadow-sm transition active:cursor-grabbing",
+                        "cursor-grab select-none rounded-xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/40 active:cursor-grabbing",
                         dragId === t.id && "opacity-50",
                       )}
                     >
@@ -83,6 +96,7 @@ export function TaskBoard({ tasks }: { tasks: Task[] }) {
                         <button
                           type="button"
                           onClick={() => void move(t.id, isDone ? "todo" : "done")}
+                          onDoubleClick={(e) => e.stopPropagation()}
                           aria-label={isDone ? "Reopen task" : "Complete task"}
                           className={cn(
                             "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 transition",
@@ -92,7 +106,7 @@ export function TaskBoard({ tasks }: { tasks: Task[] }) {
                           {isDone ? <RotateCcw className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                         </button>
                         <p className={cn("flex-1 text-sm font-medium", isDone && "text-muted-foreground line-through")}>{t.title}</p>
-                        <button type="button" onClick={() => void remove(t.id)} aria-label="Delete task" className="text-muted-foreground/60 transition hover:text-red-400">
+                        <button type="button" onClick={() => void remove(t.id)} onDoubleClick={(e) => e.stopPropagation()} aria-label="Delete task" className="text-muted-foreground/60 transition hover:text-red-400">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -118,6 +132,111 @@ export function TaskBoard({ tasks }: { tasks: Task[] }) {
           </div>
         );
       })}
+    </div>
+
+    {editing ? <TaskEditor task={editing} projects={projects} onClose={() => setEditing(null)} onSave={saveEdit} onDelete={() => { void remove(editing.id); setEditing(null); }} /> : null}
+    </>
+  );
+}
+
+const fieldClass =
+  "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
+const labelClass = "mb-1 block text-xs font-medium text-muted-foreground";
+
+function TaskEditor({
+  task,
+  projects,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  task: Task;
+  projects: Project[];
+  onClose: () => void;
+  onSave: (formData: FormData) => Promise<void>;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="mt-16 w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold">Edit task</h3>
+          <button onClick={onClose} aria-label="Close" className="text-muted-foreground/70 transition hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form action={onSave} className="grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="id" value={task.id} />
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Title</label>
+            <input name="title" defaultValue={task.title} required autoFocus className={fieldClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Status</label>
+            <select name="status" defaultValue={task.status} className={fieldClass}>
+              <option value="todo">To do</option>
+              <option value="in_progress">In progress</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Priority</label>
+            <select name="priority" defaultValue={task.priority} className={fieldClass}>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Due date</label>
+            <input name="due" type="date" defaultValue={task.due ?? ""} className={fieldClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Repeat</label>
+            <select name="repeat_rule" defaultValue={task.repeatRule} className={fieldClass}>
+              <option value="none">No repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Project</label>
+            <select name="project_id" defaultValue={task.projectId ?? ""} className={fieldClass}>
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-1 flex items-center justify-between gap-3 sm:col-span-2">
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:border-red-400/50 hover:text-red-400"
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

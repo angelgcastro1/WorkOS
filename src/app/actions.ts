@@ -99,6 +99,28 @@ export async function setTaskStatus(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function updateTask(formData: FormData) {
+  const id = str(formData.get("id"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  const supabase = await createClient();
+  const status = str(formData.get("status")) ?? "todo";
+  await supabase
+    .from("tasks")
+    .update({
+      title,
+      status,
+      priority: str(formData.get("priority")) ?? "medium",
+      project_id: str(formData.get("project_id")),
+      due: str(formData.get("due")),
+      repeat_rule: str(formData.get("repeat_rule")) || "none",
+      // Keep the completion stamp honest if the status changed in the editor.
+      completed_at: status === "done" ? today() : null,
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
 export async function deleteTask(formData: FormData) {
   const id = str(formData.get("id"));
   if (!id) return;

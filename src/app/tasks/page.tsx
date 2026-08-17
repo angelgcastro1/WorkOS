@@ -52,9 +52,9 @@ export default async function TasksPage() {
         </form>
       </Card>
 
-      <TaskBoard tasks={tasks} />
+      <TaskBoard tasks={tasks} projects={projects} />
       <p className="text-xs text-muted-foreground">
-        Drag a card between columns to change its status. Recurring tasks create the next one automatically when you complete them.
+        Double-click a card to edit it. Drag a card between columns to change its status. Recurring tasks create the next one automatically when you complete them.
       </p>
     </div>
   );
