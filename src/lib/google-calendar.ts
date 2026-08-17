@@ -310,6 +310,23 @@ export async function pullEvents(): Promise<PullResult> {
       }
     } while (pageToken);
 
+    // Anything created outside the normal save path — by the assistant, say — has no
+    // Google twin yet. Sweep those up so both calendars agree.
+    const { data: unsynced } = await supabase
+      .from("events")
+      .select("id, title, event_date, start_time, end_time, notes, meeting_link, google_event_id")
+      .eq("user_id", active.row.user_id)
+      .is("google_event_id", null)
+      .eq("origin", "workcham")
+      .gte("event_date", timeMin.slice(0, 10))
+      .limit(50);
+    for (const ev of (unsynced ?? []) as LocalEvent[]) {
+      const googleId = await pushEvent(ev);
+      if (googleId) {
+        await supabase.from("events").update({ google_event_id: googleId, synced_at: new Date().toISOString() }).eq("id", ev.id);
+      }
+    }
+
     await supabase
       .from("integrations")
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })

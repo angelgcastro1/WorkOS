@@ -1,25 +1,54 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Send, Loader2, Sparkles, Check, AlertTriangle, Mic } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-type Msg = { role: "user" | "assistant"; content: string };
+/** What the assistant did, as reported back by the ai-assistant function. */
+type Action = { tool: string; summary: string; ok: boolean };
+type Msg = { role: "user" | "assistant"; content: string; actions?: Action[] };
 
 const SUGGESTIONS = [
+  "Add a project called Q4 rebrand, due end of October",
   "What's overdue right now?",
-  "Which invoices are unpaid, and how much?",
+  "Add a task to Launch personal website: write the about page, due Friday",
   "Draft a friendly payment reminder email",
-  "Summarize my most recent note into action items",
 ];
+
+// Dictation, using the speech recognition built into Chrome and Safari.
+type RecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((e: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => void) | null;
+  onend: (() => void) | null;
+};
+
+function newRecogniser(): RecognitionLike | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: new () => RecognitionLike; webkitSpeechRecognition?: new () => RecognitionLike };
+  const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+  if (!Ctor) return null;
+  const r = new Ctor();
+  r.continuous = false;
+  r.interimResults = true;
+  r.lang = navigator.language || "en-US";
+  return r;
+}
 
 export function AssistantChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [listening, setListening] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const recogRef = useRef<RecognitionLike | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,22 +64,58 @@ export function AssistantChat() {
     setLoading(true);
     const supabase = createClient();
     const { data, error: invokeError } = await supabase.functions.invoke("ai-assistant", { body: { messages: next } });
-    let res = data as { text?: string; error?: string } | null;
+    let res = data as { text?: string; error?: string; actions?: Action[] } | null;
     // On a non-2xx response supabase-js returns data=null and stashes the body on error.context.
     if (!res && invokeError && typeof invokeError === "object" && "context" in invokeError) {
       try {
-        res = (await (invokeError as { context: Response }).context.json()) as { text?: string; error?: string };
+        res = (await (invokeError as { context: Response }).context.json()) as { text?: string; error?: string; actions?: Action[] };
       } catch {
         // fall through to the generic message
       }
     }
     if (res?.text) {
       const txt = res.text;
-      setMessages((m) => [...m, { role: "assistant", content: txt }]);
+      const acts = res.actions ?? [];
+      setMessages((m) => [...m, { role: "assistant", content: txt, actions: acts }]);
+      // Something was created or changed — pull the rest of the app back in step.
+      if (acts.some((a) => a.ok)) router.refresh();
     } else {
       setError(res?.error || invokeError?.message || "Something went wrong.");
     }
     setLoading(false);
+  }
+
+  function toggleDictation() {
+    if (listening) {
+      recogRef.current?.stop();
+      return;
+    }
+    const recog = newRecogniser();
+    if (!recog) {
+      setError("This browser can't do dictation — type instead.");
+      return;
+    }
+    let heard = "";
+    recog.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const chunk = e.results[i][0].transcript;
+        if (e.results[i].isFinal) heard += chunk;
+        else interim += chunk;
+      }
+      setInput((heard + interim).trim());
+    };
+    recog.onend = () => {
+      setListening(false);
+      recogRef.current = null;
+    };
+    try {
+      recog.start();
+      recogRef.current = recog;
+      setListening(true);
+    } catch {
+      setListening(false);
+    }
   }
 
   return (
@@ -62,8 +127,11 @@ export function AssistantChat() {
               <Sparkles className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-sm font-medium">Ask about your work, or have me draft something.</p>
-              <p className="mt-1 text-xs text-muted-foreground">I can see your tasks, invoices, calendar, reminders, notes, and clients.</p>
+              <p className="text-sm font-medium">Ask about your work — or tell me to do it.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                I can read your tasks, invoices, calendar, reminders, notes and clients, and I can create projects, clients, tasks,
+                notes, reminders and events. I can&apos;t delete anything.
+              </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((s) => (
@@ -76,13 +144,25 @@ export function AssistantChat() {
         ) : (
           messages.map((m, i) => (
             <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-              <div
-                className={cn(
-                  "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                  m.role === "user" ? "bg-primary text-primary-foreground" : "border border-border bg-card",
-                )}
-              >
-                {m.content}
+              <div className="max-w-[85%] space-y-1.5">
+                <div
+                  className={cn(
+                    "whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                    m.role === "user" ? "bg-primary text-primary-foreground" : "border border-border bg-card",
+                  )}
+                >
+                  {m.content}
+                </div>
+                {m.actions?.length ? (
+                  <div className="space-y-1 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                    {m.actions.map((a, j) => (
+                      <p key={j} className={cn("flex items-start gap-1.5 text-xs", a.ok ? "text-emerald-400" : "text-amber-400")}>
+                        {a.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />}
+                        {a.summary}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           ))
@@ -107,9 +187,21 @@ export function AssistantChat() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything…"
+          placeholder={listening ? "Listening…" : "Ask anything, or tell me to create something…"}
           className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
         />
+        <button
+          type="button"
+          onClick={toggleDictation}
+          aria-label={listening ? "Stop dictation" : "Dictate"}
+          title="Dictate"
+          className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition",
+            listening ? "border-red-500/60 bg-red-500/10 text-red-400" : "border-border text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Mic className="h-4 w-4" />
+        </button>
         <button
           type="submit"
           disabled={loading || !input.trim()}
