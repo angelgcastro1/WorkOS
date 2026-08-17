@@ -312,52 +312,37 @@ async function runTool(supa: Supa, name: string, input: Record<string, string>):
 }
 
 // ---------------------------------------------------------------------------
+// Context: the user's live data, handed to Claude with every turn
+// ---------------------------------------------------------------------------
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  try {
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!apiKey) return json({ error: "The AI assistant isn't set up yet — add your ANTHROPIC_API_KEY in Supabase." }, 400);
+async function buildSystemPrompt(userClient: Supa, email: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const [t, p, inv, ev, rem, no, cl] = await Promise.all([
+    userClient.from("tasks").select("title, status, priority, due").neq("status", "done").limit(60),
+    userClient.from("projects").select("name, status, priority, deadline").limit(40),
+    userClient.from("invoices").select("invoice_number, amount, status, due_on").limit(60),
+    userClient.from("events").select("title, event_date, start_time").gte("event_date", today).limit(40),
+    userClient.from("reminders").select("title, due_at").eq("done", false).limit(40),
+    userClient.from("notes").select("title, type, body").limit(25),
+    userClient.from("clients").select("name, company, stage").limit(40),
+  ]);
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-    } = await userClient.auth.getUser();
-    if (!user) return json({ error: "Please sign in again." }, 401);
+  const ctx = {
+    today,
+    openTasks: t.data ?? [],
+    projects: p.data ?? [],
+    invoices: inv.data ?? [],
+    upcomingEvents: ev.data ?? [],
+    reminders: rem.data ?? [],
+    notes: (no.data ?? []).map((n: { title: string; type: string; body: string | null }) => ({
+      title: n.title,
+      type: n.type,
+      body: (n.body ?? "").slice(0, 600),
+    })),
+    clients: cl.data ?? [],
+  };
 
-    const body = await req.json();
-    const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
-    const today = new Date().toISOString().slice(0, 10);
-
-    const [t, p, inv, ev, rem, no, cl] = await Promise.all([
-      userClient.from("tasks").select("title, status, priority, due").neq("status", "done").limit(60),
-      userClient.from("projects").select("name, status, priority, deadline").limit(40),
-      userClient.from("invoices").select("invoice_number, amount, status, due_on").limit(60),
-      userClient.from("events").select("title, event_date, start_time").gte("event_date", today).limit(40),
-      userClient.from("reminders").select("title, due_at").eq("done", false).limit(40),
-      userClient.from("notes").select("title, type, body").limit(25),
-      userClient.from("clients").select("name, company, stage").limit(40),
-    ]);
-
-    const ctx = {
-      today,
-      openTasks: t.data ?? [],
-      projects: p.data ?? [],
-      invoices: inv.data ?? [],
-      upcomingEvents: ev.data ?? [],
-      reminders: rem.data ?? [],
-      notes: (no.data ?? []).map((n: { title: string; type: string; body: string | null }) => ({
-        title: n.title,
-        type: n.type,
-        body: (n.body ?? "").slice(0, 600),
-      })),
-      clients: cl.data ?? [],
-    };
-
-    const system = `You are the built-in assistant in WorkCham, the personal business OS for ${user.email} and their company Cham Media. Today is ${today}. The user's timezone is America/New_York.
+  return `You are the built-in assistant in WorkCham, the personal business OS for ${email} and their company Cham Media. Today is ${today}. The user's timezone is America/New_York.
 
 You can both answer questions from the live data below AND change things using the tools you have been given.
 
@@ -368,50 +353,159 @@ How to act:
 - Only use a client_name or project_name that appears in the data below, or that you have just created in this same turn.
 - Dates: work out real dates from phrases like "next Friday" or "end of the month" using today's date. Always send YYYY-MM-DD.
 - You cannot delete anything. If asked, say so plainly and suggest they use the delete button on the item.
-- After acting, confirm in one short line what now exists — no bullet lists for one or two items.
+- Say what you are about to do in a few words before calling tools, then confirm briefly at the end. Keep it short — the actions are listed separately on screen.
 
 When asked to draft something (client email, invoice note, proposal, follow-up), return polished ready-to-send copy. When asked to summarize, give key points and action items. Be concise, friendly, practical.
 
 USER DATA (JSON):
 ${JSON.stringify(ctx)}`;
+}
 
-    const model = Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-4-6";
-    const actions: Action[] = [];
-    let text = "";
+// ---------------------------------------------------------------------------
+// The request handler — streams back over SSE so the page can show progress
+// ---------------------------------------------------------------------------
 
-    // Claude may need several rounds: call a tool, see the result, call the next one.
-    for (let round = 0; round < 8; round++) {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model, max_tokens: 1500, system, tools: TOOLS, messages }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) return json({ error: data?.error?.message ?? "AI request failed." }, 400);
+function sse(obj: unknown): string {
+  return `data: ${JSON.stringify(obj)}\n\n`;
+}
 
-      const blocks = (data.content ?? []) as { type: string; text?: string; id?: string; name?: string; input?: Record<string, string> }[];
-      text = blocks
-        .filter((b) => b.type === "text")
-        .map((b) => b.text ?? "")
-        .join("\n")
-        .trim();
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-      const calls = blocks.filter((b) => b.type === "tool_use");
-      if (data.stop_reason !== "tool_use" || calls.length === 0) break;
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) return json({ error: "The AI assistant isn't set up yet — add your ANTHROPIC_API_KEY in Supabase." }, 400);
 
-      messages.push({ role: "assistant", content: blocks });
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const {
+    data: { user },
+  } = await userClient.auth.getUser();
+  if (!user) return json({ error: "Please sign in again." }, 401);
 
-      const results = [];
-      for (const call of calls) {
-        const outcome = await runTool(userClient, call.name!, call.input ?? {});
-        actions.push({ tool: call.name!, summary: outcome.message, ok: outcome.ok });
-        results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.message, is_error: !outcome.ok });
+  const body = await req.json().catch(() => ({}));
+  const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
+  const model = Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-4-6";
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const push = (obj: unknown) => controller.enqueue(encoder.encode(sse(obj)));
+      try {
+        push({ type: "status", label: "Reading your data…" });
+        const system = await buildSystemPrompt(userClient, user.email ?? "");
+        push({ type: "status", label: "Thinking…" });
+
+        for (let round = 0; round < 8; round++) {
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({ model, max_tokens: 1500, system, tools: TOOLS, messages, stream: true }),
+          });
+
+          if (!resp.ok || !resp.body) {
+            const detail = await resp.text().catch(() => "");
+            push({ type: "error", error: detail.slice(0, 300) || "AI request failed." });
+            break;
+          }
+
+          // Rebuild Claude's message as it arrives, and pass the words straight through.
+          const blocks: { type: string; text?: string; id?: string; name?: string; input?: unknown; partial?: string }[] = [];
+          let stopReason = "";
+          let buffer = "";
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split("\n\n");
+            buffer = frames.pop() ?? "";
+
+            for (const frame of frames) {
+              const line = frame.split("\n").find((l) => l.startsWith("data:"));
+              if (!line) continue;
+              let evt: {
+                type?: string;
+                index?: number;
+                content_block?: { type: string; id?: string; name?: string };
+                delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+              };
+              try {
+                evt = JSON.parse(line.slice(5).trim());
+              } catch {
+                continue;
+              }
+
+              if (evt.type === "content_block_start" && evt.content_block) {
+                blocks[evt.index ?? 0] = { ...evt.content_block, text: "", partial: "" };
+                if (evt.content_block.type === "tool_use") push({ type: "status", label: "Working…" });
+              } else if (evt.type === "content_block_delta") {
+                const block = blocks[evt.index ?? 0];
+                if (!block) continue;
+                if (evt.delta?.type === "text_delta" && evt.delta.text) {
+                  block.text = (block.text ?? "") + evt.delta.text;
+                  push({ type: "text", text: evt.delta.text });
+                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
+                  block.partial = (block.partial ?? "") + evt.delta.partial_json;
+                }
+              } else if (evt.type === "content_block_stop") {
+                const block = blocks[evt.index ?? 0];
+                if (block?.type === "tool_use") {
+                  try {
+                    block.input = block.partial ? JSON.parse(block.partial) : {};
+                  } catch {
+                    block.input = {};
+                  }
+                  delete block.partial;
+                }
+              } else if (evt.type === "message_delta" && evt.delta?.stop_reason) {
+                stopReason = evt.delta.stop_reason;
+              }
+            }
+          }
+
+          const clean = blocks
+            .filter(Boolean)
+            // An empty text block is rejected when the message is sent back, so drop them.
+            .filter((b) => b.type === "tool_use" || (b.text ?? "").trim().length > 0)
+            .map((b) =>
+              b.type === "tool_use"
+                ? { type: "tool_use", id: b.id, name: b.name, input: b.input ?? {} }
+                : { type: "text", text: b.text ?? "" },
+            );
+          const calls = clean.filter((b) => b.type === "tool_use") as { id: string; name: string; input: Record<string, string> }[];
+
+          if (stopReason !== "tool_use" || calls.length === 0) break;
+
+          messages.push({ role: "assistant", content: clean });
+          const results = [];
+          for (const call of calls) {
+            const outcome = await runTool(userClient, call.name, call.input ?? {});
+            push({ type: "action", action: { tool: call.name, summary: outcome.message, ok: outcome.ok } });
+            results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.message, is_error: !outcome.ok });
+          }
+          messages.push({ role: "user", content: results });
+          push({ type: "status", label: "Carrying on…" });
+        }
+
+        push({ type: "done" });
+      } catch (e) {
+        push({ type: "error", error: String(e) });
+      } finally {
+        controller.close();
       }
-      messages.push({ role: "user", content: results });
-    }
+    },
+  });
 
-    return json({ text: text || (actions.length ? actions.map((a) => a.summary).join(" ") : "(no response)"), actions });
-  } catch (e) {
-    return json({ error: String(e) }, 500);
-  }
+  return new Response(stream, {
+    headers: {
+      ...cors,
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    },
+  });
 });

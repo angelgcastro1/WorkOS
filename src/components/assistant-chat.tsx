@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, Sparkles, Check, AlertTriangle, Mic } from "lucide-react";
+import { Send, Sparkles, Check, AlertTriangle, Mic } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-/** What the assistant did, as reported back by the ai-assistant function. */
+/** What the assistant did, reported as each tool finishes. */
 type Action = { tool: string; summary: string; ok: boolean };
 type Msg = { role: "user" | "assistant"; content: string; actions?: Action[] };
 
@@ -44,6 +44,7 @@ export function AssistantChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [listening, setListening] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -52,37 +53,112 @@ export function AssistantChat() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, status]);
+
+  /** Adds to the assistant message currently being written. */
+  function appendToReply(text: string) {
+    setMessages((m) => {
+      const last = m[m.length - 1];
+      if (!last || last.role !== "assistant") return [...m, { role: "assistant", content: text }];
+      return [...m.slice(0, -1), { ...last, content: last.content + text }];
+    });
+  }
+
+  function attachAction(action: Action) {
+    setMessages((m) => {
+      const last = m[m.length - 1];
+      if (!last || last.role !== "assistant") return [...m, { role: "assistant", content: "", actions: [action] }];
+      return [...m.slice(0, -1), { ...last, actions: [...(last.actions ?? []), action] }];
+    });
+  }
 
   async function send(text: string) {
     const content = text.trim();
     if (!content || loading) return;
     setError("");
-    const next: Msg[] = [...messages, { role: "user", content }];
-    setMessages(next);
+    const history: Msg[] = [...messages, { role: "user", content }];
+    setMessages(history);
     setInput("");
     setLoading(true);
-    const supabase = createClient();
-    const { data, error: invokeError } = await supabase.functions.invoke("ai-assistant", { body: { messages: next } });
-    let res = data as { text?: string; error?: string; actions?: Action[] } | null;
-    // On a non-2xx response supabase-js returns data=null and stashes the body on error.context.
-    if (!res && invokeError && typeof invokeError === "object" && "context" in invokeError) {
-      try {
-        res = (await (invokeError as { context: Response }).context.json()) as { text?: string; error?: string; actions?: Action[] };
-      } catch {
-        // fall through to the generic message
+    setStatus("Sending…");
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Please sign in again.");
+
+      // Streamed, so the words show up as they are written. supabase.functions.invoke
+      // waits for the whole body, so this talks to the function directly.
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/ai-assistant`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, content: m.content })) }),
+      });
+
+      if (!res.ok || !res.body) {
+        const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error ?? "Something went wrong.");
       }
-    }
-    if (res?.text) {
-      const txt = res.text;
-      const acts = res.actions ?? [];
-      setMessages((m) => [...m, { role: "assistant", content: txt, actions: acts }]);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let started = false;
+      let changed = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          const line = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (!line) continue;
+          let evt: { type?: string; text?: string; label?: string; action?: Action; error?: string };
+          try {
+            evt = JSON.parse(line.slice(5).trim());
+          } catch {
+            continue;
+          }
+
+          if (evt.type === "status" && evt.label) {
+            setStatus(evt.label);
+          } else if (evt.type === "text" && evt.text) {
+            if (!started) {
+              started = true;
+              setStatus("");
+              setMessages((m) => [...m, { role: "assistant", content: "" }]);
+            }
+            appendToReply(evt.text);
+          } else if (evt.type === "action" && evt.action) {
+            if (!started) {
+              started = true;
+              setMessages((m) => [...m, { role: "assistant", content: "" }]);
+            }
+            attachAction(evt.action);
+            if (evt.action.ok) changed = true;
+          } else if (evt.type === "error" && evt.error) {
+            setError(evt.error);
+          }
+        }
+      }
+
       // Something was created or changed — pull the rest of the app back in step.
-      if (acts.some((a) => a.ok)) router.refresh();
-    } else {
-      setError(res?.error || invokeError?.message || "Something went wrong.");
+      if (changed) router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setStatus("");
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function toggleDictation() {
@@ -142,41 +218,59 @@ export function AssistantChat() {
             </div>
           </div>
         ) : (
-          messages.map((m, i) => (
-            <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-              <div className="max-w-[85%] space-y-1.5">
-                <div
-                  className={cn(
-                    "whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                    m.role === "user" ? "bg-primary text-primary-foreground" : "border border-border bg-card",
-                  )}
-                >
-                  {m.content}
+          messages.map((m, i) => {
+            const isLast = i === messages.length - 1;
+            return (
+              <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                <div className="max-w-[85%] space-y-1.5">
+                  {m.content ? (
+                    <div
+                      className={cn(
+                        "whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                        m.role === "user" ? "bg-primary text-primary-foreground" : "border border-border bg-card",
+                      )}
+                    >
+                      {m.content}
+                      {/* Cursor, so you can see it is still writing. */}
+                      {loading && isLast && m.role === "assistant" ? (
+                        <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-primary" />
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {m.actions?.length ? (
+                    <div className="space-y-1 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                      {m.actions.map((a, j) => (
+                        <p key={j} className={cn("flex items-start gap-1.5 text-xs", a.ok ? "text-emerald-400" : "text-amber-400")}>
+                          {a.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />}
+                          {a.summary}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                {m.actions?.length ? (
-                  <div className="space-y-1 rounded-xl border border-border bg-muted/40 px-3 py-2">
-                    {m.actions.map((a, j) => (
-                      <p key={j} className={cn("flex items-start gap-1.5 text-xs", a.ok ? "text-emerald-400" : "text-amber-400")}>
-                        {a.ok ? <Check className="mt-0.5 h-3 w-3 shrink-0" /> : <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />}
-                        {a.summary}
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
-        {loading ? (
+
+        {status ? (
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3.5 py-2.5 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+              <span className="flex gap-1">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
+              </span>
+              {status}
             </div>
           </div>
         ) : null}
+
         {error ? <p className="text-center text-xs text-red-400">{error}</p> : null}
         <div ref={endRef} />
       </div>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
