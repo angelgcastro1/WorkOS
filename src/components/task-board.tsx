@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Trash2, RotateCcw, Repeat, X } from "lucide-react";
 import type { Project, Task, TaskStatus } from "@/lib/data";
@@ -10,13 +10,30 @@ import { cn, formatDate, daysUntil } from "@/lib/utils";
 
 const columns: TaskStatus[] = ["todo", "in_progress", "blocked", "done"];
 
-export function TaskBoard({ tasks, projects = [] }: { tasks: Task[]; projects?: Project[] }) {
+export function TaskBoard({
+  tasks,
+  projects = [],
+  focusTaskId = null,
+}: {
+  tasks: Task[];
+  projects?: Project[];
+  /** Arrived from a project card: scroll this task into view and flash it. */
+  focusTaskId?: string | null;
+}) {
   const [overrides, setOverrides] = useState<Record<string, TaskStatus>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<TaskStatus | null>(null);
   // The task being edited, opened by double-clicking its card.
   const [editing, setEditing] = useState<Task | null>(null);
+  const focusRef = useRef<HTMLDivElement>(null);
+
+  // Scrolling the browser is an external side effect, so it belongs in an effect.
+  useEffect(() => {
+    if (focusTaskId && focusRef.current) {
+      focusRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusTaskId]);
 
   const statusOf = (t: Task): TaskStatus => overrides[t.id] ?? t.status;
 
@@ -83,6 +100,8 @@ export function TaskBoard({ tasks, projects = [] }: { tasks: Task[]; projects?: 
                   return (
                     <div
                       key={t.id}
+                      id={`task-${t.id}`}
+                      ref={t.id === focusTaskId ? focusRef : undefined}
                       draggable
                       onDragStart={() => setDragId(t.id)}
                       onDragEnd={() => setDragId(null)}
@@ -91,6 +110,7 @@ export function TaskBoard({ tasks, projects = [] }: { tasks: Task[]; projects?: 
                       className={cn(
                         "cursor-grab select-none rounded-xl border border-border bg-card p-3 shadow-sm transition hover:border-primary/40 active:cursor-grabbing",
                         dragId === t.id && "opacity-50",
+                        t.id === focusTaskId && "border-primary ring-2 ring-primary/40",
                       )}
                     >
                       <div className="flex items-start gap-2">

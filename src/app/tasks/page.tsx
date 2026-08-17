@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ project?: string; task?: string }> }) {
   const sp = await searchParams;
   const { tasks, projects } = await getWorkspace();
 
@@ -78,7 +78,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         </form>
       </Card>
 
-      <TaskBoard tasks={shown} projects={projects} />
+      <TaskBoard tasks={shown} projects={projects} focusTaskId={sp.task ?? null} />
       <p className="text-xs text-muted-foreground">
         Double-click a card to edit it. Drag a card between columns to change its status. Click a project name on a card to jump to that project. Recurring tasks create the next one automatically when you complete them.
       </p>

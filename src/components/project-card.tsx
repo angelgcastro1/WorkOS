@@ -162,7 +162,7 @@ export function ProjectCard({
               ) : null}
 
               {openTasks.map((t) => (
-                <TaskLine key={t.id} task={t} />
+                <TaskLine key={t.id} task={t} projectId={project.id} />
               ))}
 
               {doneTasks.length > 0 ? (
@@ -174,7 +174,7 @@ export function ProjectCard({
                   >
                     {showDone ? "Hide" : "Show"} {doneTasks.length} completed
                   </button>
-                  {showDone ? doneTasks.map((t) => <TaskLine key={t.id} task={t} />) : null}
+                  {showDone ? doneTasks.map((t) => <TaskLine key={t.id} task={t} projectId={project.id} />) : null}
                 </>
               ) : null}
 
@@ -187,8 +187,8 @@ export function ProjectCard({
   );
 }
 
-/** One task row inside a project card: tick it off, or open the board to edit it. */
-function TaskLine({ task }: { task: Task }) {
+/** One task row inside a project card: tick it off, or open it on the task board. */
+function TaskLine({ task, projectId }: { task: Task; projectId: string }) {
   const [pending, start] = useTransition();
   const isDone = task.status === "done";
   const days = daysUntil(task.due);
@@ -216,7 +216,16 @@ function TaskLine({ task }: { task: Task }) {
       >
         {isDone ? <RotateCcw className="h-2.5 w-2.5" /> : <Check className="h-2.5 w-2.5" />}
       </button>
-      <span className={cn("min-w-0 flex-1 truncate text-xs", isDone && "text-muted-foreground line-through")}>{task.title}</span>
+      <Link
+        href={`/tasks?project=${projectId}&task=${task.id}`}
+        title="Open this task on the board"
+        className={cn(
+          "min-w-0 flex-1 truncate text-xs underline-offset-2 transition hover:text-primary hover:underline",
+          isDone && "text-muted-foreground line-through",
+        )}
+      >
+        {task.title}
+      </Link>
       {task.due && !isDone ? (
         <span className={cn("shrink-0 text-[11px]", overdue ? "font-semibold text-red-400" : "text-muted-foreground")}>
           {overdue ? `${Math.abs(days as number)}d late` : formatDate(task.due)}
