@@ -98,7 +98,9 @@ export function AssistantChat() {
           apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ messages: history.map((m) => ({ role: m.role, content: m.content })) }),
+        // stream: true asks the function for server-sent events. Without it the
+        // function replies with one JSON object, which is what older builds expect.
+        body: JSON.stringify({ stream: true, messages: history.map((m) => ({ role: m.role, content: m.content })) }),
       });
 
       if (!res.ok || !res.body) {

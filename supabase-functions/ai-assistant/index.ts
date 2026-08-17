@@ -362,7 +362,130 @@ ${JSON.stringify(ctx)}`;
 }
 
 // ---------------------------------------------------------------------------
-// The request handler — streams back over SSE so the page can show progress
+// One agent loop, two ways of reporting back
+// ---------------------------------------------------------------------------
+
+type Event =
+  | { type: "status"; label: string }
+  | { type: "text"; text: string }
+  | { type: "action"; action: { tool: string; summary: string; ok: boolean } }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
+async function runAgent(
+  userClient: Supa,
+  apiKey: string,
+  model: string,
+  email: string,
+  messages: unknown[],
+  push: (e: Event) => void,
+): Promise<void> {
+  push({ type: "status", label: "Reading your data…" });
+  const system = await buildSystemPrompt(userClient, email);
+  push({ type: "status", label: "Thinking…" });
+
+  for (let round = 0; round < 8; round++) {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: 1500, system, tools: TOOLS, messages, stream: true }),
+    });
+
+    if (!resp.ok || !resp.body) {
+      const detail = await resp.text().catch(() => "");
+      push({ type: "error", error: detail.slice(0, 300) || "AI request failed." });
+      return;
+    }
+
+    // Rebuild Claude's message as it arrives, and pass the words straight through.
+    const blocks: { type: string; text?: string; id?: string; name?: string; input?: unknown; partial?: string }[] = [];
+    let stopReason = "";
+    let buffer = "";
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        const line = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        let evt: {
+          type?: string;
+          index?: number;
+          content_block?: { type: string; id?: string; name?: string };
+          delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+        };
+        try {
+          evt = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue;
+        }
+
+        if (evt.type === "content_block_start" && evt.content_block) {
+          blocks[evt.index ?? 0] = { ...evt.content_block, text: "", partial: "" };
+          if (evt.content_block.type === "tool_use") push({ type: "status", label: "Working…" });
+        } else if (evt.type === "content_block_delta") {
+          const block = blocks[evt.index ?? 0];
+          if (!block) continue;
+          if (evt.delta?.type === "text_delta" && evt.delta.text) {
+            block.text = (block.text ?? "") + evt.delta.text;
+            push({ type: "text", text: evt.delta.text });
+          } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
+            block.partial = (block.partial ?? "") + evt.delta.partial_json;
+          }
+        } else if (evt.type === "content_block_stop") {
+          const block = blocks[evt.index ?? 0];
+          if (block?.type === "tool_use") {
+            try {
+              block.input = block.partial ? JSON.parse(block.partial) : {};
+            } catch {
+              block.input = {};
+            }
+            delete block.partial;
+          }
+        } else if (evt.type === "message_delta" && evt.delta?.stop_reason) {
+          stopReason = evt.delta.stop_reason;
+        }
+      }
+    }
+
+    const clean = blocks
+      .filter(Boolean)
+      // An empty text block is rejected when the message is sent back, so drop them.
+      .filter((b) => b.type === "tool_use" || (b.text ?? "").trim().length > 0)
+      .map((b) =>
+        b.type === "tool_use"
+          ? { type: "tool_use", id: b.id, name: b.name, input: b.input ?? {} }
+          : { type: "text", text: b.text ?? "" },
+      );
+    const calls = clean.filter((b) => b.type === "tool_use") as { id: string; name: string; input: Record<string, string> }[];
+
+    if (stopReason !== "tool_use" || calls.length === 0) return;
+
+    messages.push({ role: "assistant", content: clean });
+    const results = [];
+    for (const call of calls) {
+      const outcome = await runTool(userClient, call.name, call.input ?? {});
+      push({ type: "action", action: { tool: call.name, summary: outcome.message, ok: outcome.ok } });
+      results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.message, is_error: !outcome.ok });
+    }
+    messages.push({ role: "user", content: results });
+    push({ type: "status", label: "Carrying on…" });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The request handler
+//
+// Two modes on purpose. A page that asks for `stream: true` gets server-sent
+// events and can show the words arriving; anything else gets one JSON object at
+// the end. That way a browser running an older cached copy of the app still
+// works instead of showing empty bubbles.
 // ---------------------------------------------------------------------------
 
 function sse(obj: unknown): string {
@@ -387,110 +510,30 @@ Deno.serve(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
   const model = Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-4-6";
-  const encoder = new TextEncoder();
+  const email = user.email ?? "";
 
+  // ---- plain JSON, for older app builds -----------------------------------
+  if (body?.stream !== true) {
+    const parts: string[] = [];
+    const actions: { tool: string; summary: string; ok: boolean }[] = [];
+    let failure = "";
+    await runAgent(userClient, apiKey, model, email, messages, (e) => {
+      if (e.type === "text") parts.push(e.text);
+      else if (e.type === "action") actions.push(e.action);
+      else if (e.type === "error") failure = e.error;
+    });
+    if (failure && parts.length === 0) return json({ error: failure }, 400);
+    const text = parts.join("").trim() || (actions.length ? actions.map((a) => a.summary).join(" ") : "(no response)");
+    return json({ text, actions });
+  }
+
+  // ---- streamed, for the current app --------------------------------------
+  const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const push = (obj: unknown) => controller.enqueue(encoder.encode(sse(obj)));
+      const push = (e: Event) => controller.enqueue(encoder.encode(sse(e)));
       try {
-        push({ type: "status", label: "Reading your data…" });
-        const system = await buildSystemPrompt(userClient, user.email ?? "");
-        push({ type: "status", label: "Thinking…" });
-
-        for (let round = 0; round < 8; round++) {
-          const resp = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-            body: JSON.stringify({ model, max_tokens: 1500, system, tools: TOOLS, messages, stream: true }),
-          });
-
-          if (!resp.ok || !resp.body) {
-            const detail = await resp.text().catch(() => "");
-            push({ type: "error", error: detail.slice(0, 300) || "AI request failed." });
-            break;
-          }
-
-          // Rebuild Claude's message as it arrives, and pass the words straight through.
-          const blocks: { type: string; text?: string; id?: string; name?: string; input?: unknown; partial?: string }[] = [];
-          let stopReason = "";
-          let buffer = "";
-          const reader = resp.body.getReader();
-          const decoder = new TextDecoder();
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const frames = buffer.split("\n\n");
-            buffer = frames.pop() ?? "";
-
-            for (const frame of frames) {
-              const line = frame.split("\n").find((l) => l.startsWith("data:"));
-              if (!line) continue;
-              let evt: {
-                type?: string;
-                index?: number;
-                content_block?: { type: string; id?: string; name?: string };
-                delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
-              };
-              try {
-                evt = JSON.parse(line.slice(5).trim());
-              } catch {
-                continue;
-              }
-
-              if (evt.type === "content_block_start" && evt.content_block) {
-                blocks[evt.index ?? 0] = { ...evt.content_block, text: "", partial: "" };
-                if (evt.content_block.type === "tool_use") push({ type: "status", label: "Working…" });
-              } else if (evt.type === "content_block_delta") {
-                const block = blocks[evt.index ?? 0];
-                if (!block) continue;
-                if (evt.delta?.type === "text_delta" && evt.delta.text) {
-                  block.text = (block.text ?? "") + evt.delta.text;
-                  push({ type: "text", text: evt.delta.text });
-                } else if (evt.delta?.type === "input_json_delta" && evt.delta.partial_json) {
-                  block.partial = (block.partial ?? "") + evt.delta.partial_json;
-                }
-              } else if (evt.type === "content_block_stop") {
-                const block = blocks[evt.index ?? 0];
-                if (block?.type === "tool_use") {
-                  try {
-                    block.input = block.partial ? JSON.parse(block.partial) : {};
-                  } catch {
-                    block.input = {};
-                  }
-                  delete block.partial;
-                }
-              } else if (evt.type === "message_delta" && evt.delta?.stop_reason) {
-                stopReason = evt.delta.stop_reason;
-              }
-            }
-          }
-
-          const clean = blocks
-            .filter(Boolean)
-            // An empty text block is rejected when the message is sent back, so drop them.
-            .filter((b) => b.type === "tool_use" || (b.text ?? "").trim().length > 0)
-            .map((b) =>
-              b.type === "tool_use"
-                ? { type: "tool_use", id: b.id, name: b.name, input: b.input ?? {} }
-                : { type: "text", text: b.text ?? "" },
-            );
-          const calls = clean.filter((b) => b.type === "tool_use") as { id: string; name: string; input: Record<string, string> }[];
-
-          if (stopReason !== "tool_use" || calls.length === 0) break;
-
-          messages.push({ role: "assistant", content: clean });
-          const results = [];
-          for (const call of calls) {
-            const outcome = await runTool(userClient, call.name, call.input ?? {});
-            push({ type: "action", action: { tool: call.name, summary: outcome.message, ok: outcome.ok } });
-            results.push({ type: "tool_result", tool_use_id: call.id, content: outcome.message, is_error: !outcome.ok });
-          }
-          messages.push({ role: "user", content: results });
-          push({ type: "status", label: "Carrying on…" });
-        }
-
+        await runAgent(userClient, apiKey, model, email, messages, push);
         push({ type: "done" });
       } catch (e) {
         push({ type: "error", error: String(e) });
@@ -501,11 +544,6 @@ Deno.serve(async (req: Request) => {
   });
 
   return new Response(stream, {
-    headers: {
-      ...cors,
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache",
-      connection: "keep-alive",
-    },
+    headers: { ...cors, "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" },
   });
 });
