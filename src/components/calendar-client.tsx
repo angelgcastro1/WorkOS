@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Pencil, ExternalLink, Clock, Repeat, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Pencil, ExternalLink, Clock, Repeat, Bell, Video } from "lucide-react";
 import type { CalendarEvent, Client, Project, Invoice, Reminder, Task, EventType } from "@/lib/data";
-import { createEvent, updateEvent, deleteEvent, moveEvent } from "@/app/actions";
+import { createEvent, updateEvent, deleteEvent, moveEvent, createZoomLink } from "@/app/actions";
 import { cn, formatMoney, formatDate } from "@/lib/utils";
 
 type View = "month" | "week" | "day" | "agenda";
@@ -17,6 +17,8 @@ type Props = {
   reminders: Reminder[];
   tasks: Task[];
   todayIso: string;
+  /** True when the Zoom keys are configured, so the editor can offer the Zoom button. */
+  zoomReady?: boolean;
 };
 
 type EditorState = { mode: "new" | "edit"; date: string; event?: CalendarEvent };
@@ -131,7 +133,7 @@ const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 const labelClass = "mb-1 block text-xs font-medium text-muted-foreground";
 
-export function CalendarClient({ events, clients, projects, invoices, reminders, tasks, todayIso }: Props) {
+export function CalendarClient({ events, clients, projects, invoices, reminders, tasks, todayIso, zoomReady = false }: Props) {
   const [view, setView] = useState<View>("month");
   const [cursor, setCursor] = useState<string>(todayIso);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -300,7 +302,7 @@ export function CalendarClient({ events, clients, projects, invoices, reminders,
       ) : null}
 
       {editor ? (
-        <EventEditor editor={editor} clients={clients} projects={projects} onClose={() => setEditor(null)} onSave={handleSave} onDelete={() => editor.event && handleDelete(editor.event.id)} />
+        <EventEditor editor={editor} clients={clients} projects={projects} zoomReady={zoomReady} onClose={() => setEditor(null)} onSave={handleSave} onDelete={() => editor.event && handleDelete(editor.event.id)} />
       ) : null}
     </div>
   );
@@ -673,6 +675,7 @@ function EventEditor({
   editor,
   clients,
   projects,
+  zoomReady,
   onClose,
   onSave,
   onDelete,
@@ -680,11 +683,41 @@ function EventEditor({
   editor: EditorState;
   clients: Client[];
   projects: Project[];
+  zoomReady: boolean;
   onClose: () => void;
   onSave: (formData: FormData) => Promise<void>;
   onDelete: () => void;
 }) {
   const ev = editor.event;
+  const [meetingLink, setMeetingLink] = useState(ev?.meetingLink ?? "");
+  const [zoomBusy, setZoomBusy] = useState(false);
+  const [zoomError, setZoomError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Schedules a real Zoom meeting for whatever title/date/time is in the form right
+  // now, then drops the join link into the field. The event itself is saved as usual.
+  async function makeZoom() {
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    setZoomBusy(true);
+    setZoomError(null);
+    try {
+      const res = await createZoomLink({
+        title: String(fd.get("title") ?? "") || "WorkCham meeting",
+        date: String(fd.get("event_date") ?? "") || editor.date,
+        start: String(fd.get("start_time") ?? "") || null,
+        end: String(fd.get("end_time") ?? "") || null,
+      });
+      if ("url" in res && res.url) setMeetingLink(res.url);
+      else setZoomError("error" in res ? res.error ?? "Zoom could not create the meeting." : "Zoom could not create the meeting.");
+    } catch {
+      setZoomError("Zoom could not create the meeting.");
+    } finally {
+      setZoomBusy(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="mt-10 w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -695,7 +728,7 @@ function EventEditor({
           </button>
         </div>
 
-        <form action={onSave} className="grid gap-3 sm:grid-cols-2">
+        <form ref={formRef} action={onSave} className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={labelClass}>Title</label>
             <input name="title" defaultValue={ev?.title ?? ""} required placeholder="e.g. Client kickoff call" className={fieldClass} />
@@ -769,7 +802,38 @@ function EventEditor({
           </div>
           <div className="sm:col-span-2">
             <label className={labelClass}>Meeting link</label>
-            <input name="meeting_link" type="url" defaultValue={ev?.meetingLink ?? ""} placeholder="https://meet.google.com/…" className={fieldClass} />
+            <div className="flex gap-2">
+              <input
+                name="meeting_link"
+                type="url"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                placeholder="https://meet.google.com/…"
+                className={fieldClass}
+              />
+              {zoomReady ? (
+                <button
+                  type="button"
+                  onClick={makeZoom}
+                  disabled={zoomBusy}
+                  title="Schedule a Zoom meeting and drop the link in"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-60"
+                >
+                  <Video className="h-4 w-4 text-blue-400" /> {zoomBusy ? "Creating…" : "Zoom"}
+                </button>
+              ) : null}
+              {meetingLink ? (
+                <a
+                  href={meetingLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center rounded-lg border border-border px-3 py-2 text-sm font-medium transition hover:bg-muted"
+                >
+                  Join
+                </a>
+              ) : null}
+            </div>
+            {zoomError ? <p className="mt-1 text-xs text-red-400">{zoomError}</p> : null}
           </div>
           <div className="sm:col-span-2">
             <label className={labelClass}>Notes</label>

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { deleteRemoteEvent, googleStatus, pullEvents, pushEvent } from "@/lib/google-calendar";
+import { createMeeting, zoomConfigured } from "@/lib/zoom";
 
 function str(value: FormDataEntryValue | null): string | null {
   const s = value?.toString().trim();
@@ -517,7 +519,7 @@ export async function createEvent(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return;
   const rm = str(formData.get("reminder_minutes"));
-  await supabase.from("events").insert({
+  const { data: created } = await supabase.from("events").insert({
     user_id: user.id,
     title: str(formData.get("title")) || "Untitled event",
     type: str(formData.get("type")) || "meeting",
@@ -535,7 +537,16 @@ export async function createEvent(formData: FormData) {
     reminder_channel: str(formData.get("reminder_channel")) || "both",
     repeat_rule: str(formData.get("repeat_rule")) || "none",
     reminder_at: str(formData.get("reminder_at")) || null,
-  });
+  }).select("id, title, event_date, start_time, end_time, notes, meeting_link, google_event_id").maybeSingle();
+
+  // Mirror it onto Google straight away. If Google is not connected this is a no-op,
+  // and a failure there never blocks the save.
+  if (created) {
+    const googleId = await pushEvent(created);
+    if (googleId) {
+      await supabase.from("events").update({ google_event_id: googleId, synced_at: new Date().toISOString() }).eq("id", created.id);
+    }
+  }
   revalidatePath("/calendar");
   revalidatePath("/");
 }
@@ -571,6 +582,19 @@ export async function updateEvent(formData: FormData) {
       reminded_at: null,
     })
     .eq("id", id);
+
+  const { data: saved } = await supabase
+    .from("events")
+    .select("id, title, event_date, start_time, end_time, notes, meeting_link, google_event_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (saved) {
+    const googleId = await pushEvent(saved);
+    if (googleId && googleId !== saved.google_event_id) {
+      await supabase.from("events").update({ google_event_id: googleId }).eq("id", id);
+    }
+    if (googleId) await supabase.from("events").update({ synced_at: new Date().toISOString() }).eq("id", id);
+  }
   revalidatePath("/calendar");
   revalidatePath("/");
 }
@@ -583,7 +607,9 @@ export async function deleteEvent(formData: FormData) {
   if (!user) return;
   const id = str(formData.get("id"));
   if (!id) return;
+  const { data: doomed } = await supabase.from("events").select("google_event_id").eq("id", id).maybeSingle();
   await supabase.from("events").delete().eq("id", id);
+  if (doomed?.google_event_id) await deleteRemoteEvent(doomed.google_event_id);
   revalidatePath("/calendar");
   revalidatePath("/");
 }
@@ -616,4 +642,57 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+// ---------------------------------------------------------------------------
+// Integrations: Google Calendar and Zoom
+// ---------------------------------------------------------------------------
+
+/** Pulls anything new from Google into WorkCham. Safe to call as often as you like. */
+export async function syncGoogleNow() {
+  const result = await pullEvents();
+  revalidatePath("/calendar");
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return result;
+}
+
+export async function disconnectGoogle() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("integrations").delete().eq("user_id", user.id).eq("provider", "google");
+  // Events already pulled in stay put; they just stop being linked.
+  await supabase.from("events").update({ google_event_id: null }).eq("user_id", user.id).not("google_event_id", "is", null);
+  revalidatePath("/settings");
+  revalidatePath("/calendar");
+}
+
+/**
+ * Schedules a real Zoom meeting for the event being edited and returns the join link,
+ * so the calendar editor can drop it straight into the meeting-link box.
+ */
+export async function createZoomLink(input: { title: string; date: string; start: string | null; end: string | null }) {
+  if (!zoomConfigured()) return { error: "Zoom is not set up yet — add the three Zoom keys in Vercel first." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const status = await googleStatus();
+  try {
+    const meeting = await createMeeting({
+      topic: input.title,
+      date: input.date,
+      start: input.start,
+      end: input.end,
+      timeZone: status.timeZone ?? "America/New_York",
+    });
+    return { url: meeting.joinUrl, id: meeting.meetingId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Zoom could not create the meeting." };
+  }
 }
