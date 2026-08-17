@@ -9,6 +9,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { updateNote, deleteNote } from "@/app/actions";
 import { createClient } from "@/lib/supabase/client";
 import { VoiceNoteCard, VoiceNoteRecorder } from "@/components/voice-note";
+import { Linkify } from "@/components/linkify";
 
 const noteTypeStyle: Record<NoteType, string> = {
   Idea: "bg-amber-500/15 text-amber-400",
@@ -179,7 +180,11 @@ export function NoteCard({ note, projects, userId, canTranscribe = false }: Prop
         </div>
       </div>
       <h3 className="text-[15px] font-semibold leading-tight">{note.title}</h3>
-      {note.body ? <p className="mt-1.5 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">{note.body}</p> : null}
+      {note.body ? (
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">
+          <Linkify text={note.body} />
+        </p>
+      ) : null}
       {note.tags.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {note.tags.map((tag) => (

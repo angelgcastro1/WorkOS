@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Mic, Pause, Play, Square, Trash2, Loader2 } from "lucide-react";
+import { Download, Mic, Pause, Play, Scissors, Square, Trash2, Loader2 } from "lucide-react";
 import type { Attachment } from "@/lib/data";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { Linkify } from "@/components/linkify";
 
 const BARS = 56;
 
@@ -64,6 +65,50 @@ async function peaksFrom(blob: Blob): Promise<{ peaks: number[]; duration: numbe
   } catch {
     return { peaks: [], duration: 0 };
   }
+}
+
+/** Writes 16-bit mono PCM into a .wav container — the trimmed clip needs a real file. */
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const write = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  write(8, "WAVE");
+  write(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (const sample of samples) {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function peaksOf(data: Float32Array): number[] {
+  const step = Math.floor(data.length / BARS) || 1;
+  const peaks: number[] = [];
+  for (let i = 0; i < BARS; i++) {
+    let max = 0;
+    for (let j = 0; j < step; j++) {
+      const v = Math.abs(data[i * step + j] ?? 0);
+      if (v > max) max = v;
+    }
+    peaks.push(max);
+  }
+  const loudest = Math.max(...peaks, 0.01);
+  return peaks.map((p) => Number((p / loudest).toFixed(3)));
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +324,12 @@ export function VoiceNoteCard({
   const [position, setPosition] = useState(0);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // Trim mode: everything between the two handles is what you keep.
+  const [trimming, setTrimming] = useState(false);
+  const [range, setRange] = useState<[number, number]>([0, 1]);
+  const [dragging, setDragging] = useState<"start" | "end" | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const waveRef = useRef<HTMLDivElement | null>(null);
   const [supabase] = useState(() => createClient());
   const router = useRouter();
 
@@ -349,6 +399,93 @@ export function VoiceNoteCard({
     router.refresh();
   }
 
+  function fractionFromEvent(e: ReactPointerEvent): number {
+    const box = waveRef.current?.getBoundingClientRect();
+    if (!box) return 0;
+    return Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+  }
+
+  function onWavePointerDown(e: ReactPointerEvent) {
+    const f = fractionFromEvent(e);
+    if (!trimming) {
+      // Plain click while not trimming = scrub to that point.
+      if (audioRef.current && duration) {
+        audioRef.current.currentTime = f * duration;
+        setPosition(f * duration);
+      }
+      return;
+    }
+    // Grab whichever handle is nearer.
+    const nearStart = Math.abs(f - range[0]) <= Math.abs(f - range[1]);
+    setDragging(nearStart ? "start" : "end");
+    setRange(([s0, e0]) => (nearStart ? [Math.min(f, e0 - 0.02), e0] : [s0, Math.max(f, s0 + 0.02)]));
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }
+
+  function onWavePointerMove(e: ReactPointerEvent) {
+    if (!dragging) return;
+    const f = fractionFromEvent(e);
+    setRange(([s0, e0]) => (dragging === "start" ? [Math.min(f, e0 - 0.02), e0] : [s0, Math.max(f, s0 + 0.02)]));
+  }
+
+  /** Keep only the selected stretch: re-encode it, swap the file, redraw the wave. */
+  async function applyTrim() {
+    const src = await signedUrl();
+    if (!src || !duration) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const bytes = await (await fetch(src)).arrayBuffer();
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const decoded = await ctx.decodeAudioData(bytes);
+      void ctx.close();
+
+      const startSec = range[0] * decoded.duration;
+      const lengthSec = Math.max(0.1, (range[1] - range[0]) * decoded.duration);
+      const rate = 16000; // plenty for speech, and what transcription wants anyway
+      const offline = new OfflineAudioContext(1, Math.ceil(lengthSec * rate), rate);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start(0, startSec, lengthSec);
+      const rendered = await offline.startRendering();
+
+      const channel = rendered.getChannelData(0);
+      const wav = encodeWav(channel, rate);
+      const newPath = `${attachment.path.replace(/\.[^.]+$/, "")}-trim-${Date.now()}.wav`;
+
+      const { error: upErr } = await supabase.storage.from("attachments").upload(newPath, wav, { contentType: "audio/wav" });
+      if (upErr) {
+        setNote("Could not save the trimmed clip.");
+        return;
+      }
+      await supabase
+        .from("note_attachments")
+        .update({
+          path: newPath,
+          mime: "audio/wav",
+          size: wav.size,
+          duration_seconds: lengthSec,
+          peaks: peaksOf(channel),
+        })
+        .eq("id", attachment.id);
+      await supabase.storage.from("attachments").remove([attachment.path]);
+
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setUrl(null);
+      setPlaying(false);
+      setPosition(0);
+      setTrimming(false);
+      setRange([0, 1]);
+      router.refresh();
+    } catch {
+      setNote("Could not trim that recording.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const progress = duration ? position / duration : 0;
 
   return (
@@ -375,37 +512,111 @@ export function VoiceNoteCard({
           {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-px" />}
         </button>
 
-        <div className="flex h-9 min-w-0 flex-1 items-center gap-[2px]">
-          {peaks.map((p, i) => (
-            <span
-              key={i}
-              className={cn("w-[3px] flex-1 rounded-full transition-colors", i / peaks.length <= progress ? "bg-primary" : "bg-muted-foreground/40")}
-              style={{ height: `${Math.max(8, p * 100)}%` }}
-            />
-          ))}
+        <div
+          ref={waveRef}
+          onPointerDown={onWavePointerDown}
+          onPointerMove={onWavePointerMove}
+          onPointerUp={() => setDragging(null)}
+          onPointerCancel={() => setDragging(null)}
+          className={cn("relative flex h-9 min-w-0 flex-1 touch-none items-center gap-[2px]", trimming ? "cursor-ew-resize" : "cursor-pointer")}
+        >
+          {peaks.map((p, i) => {
+            const at = i / peaks.length;
+            const inRange = at >= range[0] && at <= range[1];
+            return (
+              <span
+                key={i}
+                className={cn(
+                  "w-[3px] flex-1 rounded-full transition-colors",
+                  trimming
+                    ? inRange
+                      ? "bg-amber-500"
+                      : "bg-muted-foreground/25"
+                    : at <= progress
+                      ? "bg-primary"
+                      : "bg-muted-foreground/40",
+                )}
+                style={{ height: `${Math.max(8, p * 100)}%` }}
+              />
+            );
+          })}
+
+          {trimming ? (
+            <>
+              <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-amber-500" style={{ left: `${range[0] * 100}%` }} />
+              <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-amber-500" style={{ left: `${range[1] * 100}%` }} />
+            </>
+          ) : null}
         </div>
 
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-          {clock(position)} / {clock(duration)}
+          {trimming ? `${clock((range[1] - range[0]) * duration)} kept` : `${clock(position)} / ${clock(duration)}`}
         </span>
 
-        <button type="button" onClick={download} aria-label="Download recording" className="shrink-0 text-muted-foreground/70 transition hover:text-foreground">
-          <Download className="h-3.5 w-3.5" />
-        </button>
+        {trimming ? (
+          <>
+            <button
+              type="button"
+              onClick={applyTrim}
+              disabled={busy}
+              className="shrink-0 rounded-lg border border-amber-500/60 px-2.5 py-1 text-xs font-semibold text-amber-500 transition hover:bg-amber-500/10 disabled:opacity-60"
+            >
+              {busy ? "Cutting…" : "Cut"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTrimming(false);
+                setRange([0, 1]);
+              }}
+              className="shrink-0 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={download} aria-label="Download recording" className="shrink-0 text-muted-foreground/70 transition hover:text-foreground">
+              <Download className="h-3.5 w-3.5" />
+            </button>
 
-        {canTranscribe ? (
-          <button
-            type="button"
-            onClick={transcribe}
-            disabled={busy}
-            className="shrink-0 text-xs font-medium text-muted-foreground transition hover:text-primary disabled:opacity-60"
-          >
-            {busy ? "Transcribing…" : "Transcribe"}
-          </button>
-        ) : null}
+            {canTranscribe ? (
+              <button
+                type="button"
+                onClick={transcribe}
+                disabled={busy}
+                className="shrink-0 text-xs font-medium text-muted-foreground transition hover:text-primary disabled:opacity-60"
+              >
+                {busy ? "Transcribing…" : "Transcribe"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => {
+                audioRef.current?.pause();
+                setPlaying(false);
+                setTrimming(true);
+              }}
+              aria-label="Trim recording"
+              title="Trim"
+              className="shrink-0 text-muted-foreground/70 transition hover:text-foreground"
+            >
+              <Scissors className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
       </div>
 
-      {attachment.transcript ? <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">{attachment.transcript}</p> : null}
+      {trimming ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">Drag the amber edges to choose what to keep, then Cut. The original is replaced.</p>
+      ) : null}
+
+      {attachment.transcript ? (
+        <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">
+          <Linkify text={attachment.transcript} />
+        </p>
+      ) : null}
       {note ? <p className="mt-2 text-xs text-amber-400">{note}</p> : null}
     </div>
   );

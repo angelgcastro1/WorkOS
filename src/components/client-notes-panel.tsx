@@ -5,6 +5,7 @@ import { Check, Pencil, Send, Trash2, X } from "lucide-react";
 import type { ClientNote } from "@/lib/data";
 import { addClientNote, deleteClientNote, updateClientNote } from "@/app/actions";
 import { formatDate } from "@/lib/utils";
+import { Linkify } from "@/components/linkify";
 
 type Props = { clientId: string; notes: ClientNote[] };
 
@@ -94,7 +95,9 @@ export function ClientNotesPanel({ clientId, notes }: Props) {
                 className="group flex items-start justify-between gap-3 rounded-lg px-1 py-1.5 transition hover:bg-muted/40"
               >
                 <div className="min-w-0">
-                  <p className="whitespace-pre-line text-sm text-foreground">{n.body}</p>
+                  <p className="whitespace-pre-line text-sm text-foreground">
+                    <Linkify text={n.body} />
+                  </p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">{formatDate(n.createdAt)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5 opacity-0 transition group-hover:opacity-100">
