@@ -13,6 +13,7 @@ import {
   Settings,
   Search,
   Plus,
+  Menu,
   LogOut,
   Bell,
   Shapes,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLink } from "@/components/nav-link";
+import { MobileNav } from "@/components/mobile-nav";
 import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ReminderAlerts } from "@/components/reminder-alerts";
@@ -63,6 +65,8 @@ type Props = {
 export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  // Phones have no room for the sidebar, so they get a drawer instead.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the saved preference once on mount
@@ -180,6 +184,14 @@ export function AppShell({ profile, children }: Props) {
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur md:px-8">
           <button
             type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            className="grid h-10 w-10 shrink-0 touch-manipulation place-items-center rounded-lg border border-border bg-card text-foreground transition active:bg-muted [-webkit-tap-highlight-color:transparent] md:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
             onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
             className="flex touch-manipulation items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted active:bg-muted active:text-foreground [-webkit-tap-highlight-color:transparent]"
           >
@@ -200,6 +212,7 @@ export function AppShell({ profile, children }: Props) {
 
         <main className="flex-1 px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>
+      <MobileNav items={nav} pathname={pathname} profile={profile} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <ReminderAlerts />
       <CommandPalette />
     </div>
