@@ -187,3 +187,26 @@
 .dark .reminder-cham-shadow.is-walking {
   animation: cham-enter 0.6s ease-out both;
 }
+
+/* ---------------------------------------------------------------------------
+   Touch feel. Mobile browsers add a ~300ms wait and a grey flash to taps unless
+   told otherwise, which is what makes buttons feel a beat behind your finger.
+   overscroll-behavior stops the whole page rubber-banding when a scrollable
+   panel — the sidebar, a list — reaches its end.
+   --------------------------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+a,
+button,
+[role="button"],
+label,
+summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
