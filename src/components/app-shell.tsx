@@ -182,6 +182,15 @@ export function AppShell({ profile, children }: Props) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur md:px-8">
+          {/* Phone only: the logo sits dead centre, floating above the row so it can
+              never push the hamburger, search or New button out of place. */}
+          <Link
+            href="/"
+            aria-label="WorkCham home"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 touch-manipulation [-webkit-tap-highlight-color:transparent] md:hidden"
+          >
+            <BrandMark height={30} className="shadow-lg shadow-indigo-500/20" />
+          </Link>
           <button
             type="button"
             onClick={() => setMenuOpen(true)}

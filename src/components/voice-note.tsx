@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Mic, Pause, Play, Scissors, Square, Trash2, Loader2 } from "lucide-react";
 import type { Attachment } from "@/lib/data";
@@ -112,6 +112,103 @@ function peaksOf(data: Float32Array): number[] {
 }
 
 // ---------------------------------------------------------------------------
+// The moving bars and the running clock.
+//
+// This used to be React state updated on every animation frame, which meant the
+// whole note re-rendered sixty times a second. On a phone that ate the main
+// thread, so a tap on Stop was queued behind the meter and often never landed.
+// Now the meter paints straight onto a canvas and writes the clock into a span
+// by hand: no React state, no re-renders, so the Stop button always answers.
+// ---------------------------------------------------------------------------
+
+function LiveMeter({
+  analyser,
+  startedAt,
+  clockRef,
+}: {
+  analyser: AnalyserNode;
+  startedAt: number;
+  clockRef: RefObject<HTMLSpanElement | null>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    const levels = new Array<number>(BARS).fill(0);
+    let raf = 0;
+    let lastPaint = 0;
+    let lastSecond = -1;
+    let alive = true;
+
+    const size = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    size();
+    window.addEventListener("resize", size);
+
+    const bar = (x: number, y: number, w: number, h: number, r: number) => {
+      if (typeof ctx.roundRect === "function") {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, y, w, h);
+      }
+    };
+
+    const frame = (now: number) => {
+      if (!alive) return;
+      raf = requestAnimationFrame(frame);
+      // Thirty frames a second looks identical and leaves the phone room to breathe.
+      if (now - lastPaint < 33) return;
+      lastPaint = now;
+
+      analyser.getByteTimeDomainData(buf);
+      let peak = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = Math.abs(buf[i] - 128) / 128;
+        if (v > peak) peak = v;
+      }
+      levels.shift();
+      levels.push(peak);
+
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(248, 113, 113, 0.7)";
+      const gap = 2;
+      const barW = Math.max(1, (w - gap * (BARS - 1)) / BARS);
+      for (let i = 0; i < BARS; i++) {
+        const bh = Math.max(3, levels[i] * h);
+        bar(i * (barW + gap), (h - bh) / 2, barW, bh, Math.min(barW / 2, bh / 2));
+      }
+
+      const seconds = Math.floor((now - startedAt) / 1000);
+      if (seconds !== lastSecond && clockRef.current) {
+        lastSecond = seconds;
+        clockRef.current.textContent = clock(seconds);
+      }
+    };
+    raf = requestAnimationFrame(frame);
+
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", size);
+    };
+  }, [analyser, startedAt, clockRef]);
+
+  return <canvas ref={canvasRef} className="mt-2 block h-8 w-full" aria-hidden />;
+}
+
+// ---------------------------------------------------------------------------
 
 export function VoiceNoteRecorder({
   noteId,
@@ -125,26 +222,59 @@ export function VoiceNoteRecorder({
 }) {
   const [recording, setRecording] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
   const [live, setLive] = useState("");
-  const [levels, setLevels] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [meter, setMeter] = useState<{ analyser: AnalyserNode; startedAt: number } | null>(null);
+  /** The length shown once the meter has gone and the clock stops ticking. */
+  const [finalTime, setFinalTime] = useState(0);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const recogRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTextRef = useRef("");
-  const rafRef = useRef<number | null>(null);
   const startedAtRef = useRef(0);
+  const durationRef = useRef(0);
+  const stoppingRef = useRef(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clockRef = useRef<HTMLSpanElement | null>(null);
 
   const router = useRouter();
   const [supabase] = useState(() => createClient());
 
+  /** Hands the microphone back to the phone. */
+  function releaseMic() {
+    try {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    } catch {
+      // already gone
+    }
+    streamRef.current = null;
+  }
+
+  /** Tears down the analyser graph feeding the meter. */
+  function releaseAudioGraph() {
+    const ctx = audioCtxRef.current;
+    audioCtxRef.current = null;
+    if (ctx && ctx.state !== "closed") void ctx.close().catch(() => {});
+  }
+
+  function releaseRecogniser() {
+    try {
+      recogRef.current?.stop();
+    } catch {
+      // already stopped
+    }
+    recogRef.current = null;
+  }
+
   useEffect(() => {
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      releaseRecogniser();
+      releaseMic();
+      releaseAudioGraph();
     };
   }, []);
 
@@ -157,6 +287,9 @@ export function VoiceNoteRecorder({
     setError(null);
     setLive("");
     finalTextRef.current = "";
+    durationRef.current = 0;
+    stoppingRef.current = false;
+    setFinalTime(0);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -171,23 +304,14 @@ export function VoiceNoteRecorder({
       rec.start();
       recorderRef.current = rec;
 
-      // Live meter for the bars while recording.
+      // The analyser the meter reads from.
       const ctx = new AudioContext();
+      audioCtxRef.current = ctx;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       ctx.createMediaStreamSource(stream).connect(analyser);
-      const buf = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteTimeDomainData(buf);
-        let peak = 0;
-        for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
-        setLevels((prev) => [...prev.slice(-(BARS - 1)), peak]);
-        setElapsed((performance.now() - startedAtRef.current) / 1000);
-        rafRef.current = requestAnimationFrame(tick);
-      };
       // eslint-disable-next-line react-hooks/purity -- event handler, not render
       startedAtRef.current = performance.now();
-      rafRef.current = requestAnimationFrame(tick);
 
       // Free live transcript, where the browser offers it.
       const recog = newRecogniser();
@@ -210,54 +334,110 @@ export function VoiceNoteRecorder({
         }
       }
 
+      setMeter({ analyser, startedAt: startedAtRef.current });
       setRecording(true);
     } catch {
+      releaseMic();
+      releaseAudioGraph();
       setError("Microphone blocked. Allow mic access for this site and try again.");
     }
   }
 
   function stop() {
-    recorderRef.current?.stop();
-    recogRef.current?.stop();
-    recogRef.current = null;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (stoppingRef.current) return; // one press is enough
+    stoppingRef.current = true;
+
+    // eslint-disable-next-line react-hooks/purity -- event handler, not render
+    durationRef.current = Math.max(0, (performance.now() - startedAtRef.current) / 1000);
+
+    // Answer the press immediately, whatever the recorder does next.
+    setFinalTime(durationRef.current);
     setRecording(false);
     setSaving(true);
+    setMeter(null);
+    releaseRecogniser();
+
+    try {
+      // Fires ondataavailable and then onstop, which runs finish().
+      if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+      else void finish(recorderRef.current?.mimeType || "audio/webm");
+    } catch {
+      void finish(recorderRef.current?.mimeType || "audio/webm");
+    }
+
+    // Nothing may leave the button stuck on "Saving…". If the browser never calls
+    // us back, take control again and say so.
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = setTimeout(() => {
+      watchdogRef.current = null;
+      releaseMic();
+      releaseAudioGraph();
+      stoppingRef.current = false;
+      setSaving(false);
+      setError("Saving took too long — the recording may not have been kept. Please try again.");
+    }, 20000);
   }
 
   async function finish(mime: string) {
-    const blob = new Blob(chunksRef.current, { type: mime });
-    const spoken = finalTextRef.current.trim();
-    const { peaks, duration } = await peaksFrom(blob);
-    const stamp = new Date();
-    const ext = mime.includes("mp4") || mime.includes("aac") ? "m4a" : "webm";
-    const name = `Recording ${stamp.toLocaleDateString()} ${stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.${ext}`;
-    const path = `${userId}/${noteId}/${crypto.randomUUID()}.${ext}`;
+    try {
+      const blob = new Blob(chunksRef.current, { type: mime });
+      chunksRef.current = [];
+      if (blob.size === 0) {
+        setError("Nothing was recorded. Check the microphone and try again.");
+        return;
+      }
 
-    const { error: upErr } = await supabase.storage.from("attachments").upload(path, blob, { contentType: mime });
-    if (upErr) {
+      const spoken = finalTextRef.current.trim();
+      let peaks: number[] = [];
+      let duration = 0;
+      try {
+        ({ peaks, duration } = await peaksFrom(blob));
+      } catch {
+        // the waveform is a nicety — never let it block the save
+      }
+
+      const stamp = new Date();
+      const ext = mime.includes("mp4") || mime.includes("aac") ? "m4a" : "webm";
+      const name = `Recording ${stamp.toLocaleDateString()} ${stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.${ext}`;
+      const path = `${userId}/${noteId}/${crypto.randomUUID()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage.from("attachments").upload(path, blob, { contentType: mime });
+      if (upErr) {
+        setError("Could not save the recording.");
+        return;
+      }
+
+      const { error: rowErr } = await supabase.from("note_attachments").insert({
+        note_id: noteId,
+        name,
+        path,
+        mime,
+        size: blob.size,
+        duration_seconds: duration || durationRef.current,
+        peaks,
+        transcript: spoken || null,
+      });
+      if (rowErr) {
+        setError("The audio saved but could not be attached to the note.");
+        return;
+      }
+
+      if (spoken) onTranscript(spoken);
+      setLive("");
+      router.refresh();
+    } catch {
       setError("Could not save the recording.");
+    } finally {
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+      releaseMic();
+      releaseAudioGraph();
+      recorderRef.current = null;
+      stoppingRef.current = false;
       setSaving(false);
-      return;
     }
-    await supabase.from("note_attachments").insert({
-      note_id: noteId,
-      name,
-      path,
-      mime,
-      size: blob.size,
-      duration_seconds: duration || elapsed,
-      peaks,
-      transcript: spoken || null,
-    });
-
-    if (spoken) onTranscript(spoken);
-    setSaving(false);
-    setElapsed(0);
-    setLevels([]);
-    setLive("");
-    router.refresh();
   }
 
   if (recording || saving) {
@@ -269,24 +449,22 @@ export function VoiceNoteRecorder({
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
           </span>
           <span className="text-xs font-semibold text-red-400">{saving ? "Saving…" : "Recording"}</span>
-          <span className="text-xs tabular-nums text-muted-foreground">{clock(elapsed)}</span>
+          <span ref={clockRef} className="text-xs tabular-nums text-muted-foreground">
+            {clock(finalTime)}
+          </span>
           <button
             type="button"
             onClick={stop}
             disabled={saving}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+            aria-label={saving ? "Saving recording" : "Stop recording"}
+            className="ml-auto inline-flex min-h-11 min-w-[92px] touch-manipulation items-center justify-center gap-1.5 rounded-lg bg-red-500 px-4 text-xs font-semibold text-white transition hover:brightness-110 active:brightness-90 disabled:opacity-60 [-webkit-tap-highlight-color:transparent]"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3 w-3 fill-current" />}
             {saving ? "Saving" : "Stop"}
           </button>
         </div>
 
-        <div className="mt-2 flex h-8 items-center gap-[2px]">
-          {Array.from({ length: BARS }).map((_, i) => {
-            const v = levels[levels.length - BARS + i] ?? 0;
-            return <span key={i} className="w-[3px] rounded-full bg-red-400/70" style={{ height: `${Math.max(3, v * 100)}%` }} />;
-          })}
-        </div>
+        {meter ? <LiveMeter analyser={meter.analyser} startedAt={meter.startedAt} clockRef={clockRef} /> : <div className="mt-2 h-8" />}
 
         {live ? <p className="mt-2 line-clamp-3 text-xs italic text-muted-foreground">{live}</p> : null}
       </div>
