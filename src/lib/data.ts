@@ -57,6 +57,10 @@ export interface Attachment {
   mime: string | null;
   size: number | null;
   createdAt: string | null;
+  // Voice-note recordings carry a waveform, a length, and an optional transcript.
+  durationSeconds?: number | null;
+  peaks?: number[] | null;
+  transcript?: string | null;
 }
 
 export interface Note {
