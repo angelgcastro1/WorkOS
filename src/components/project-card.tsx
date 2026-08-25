@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Pencil, Trash2, Calendar } from "lucide-react";
-import type { Project } from "@/lib/data";
+import type { Project, Task } from "@/lib/data";
 import {
   Card,
   CardContent,
@@ -19,7 +19,18 @@ import { updateProject, deleteProject } from "@/app/actions";
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
-export function ProjectCard({ project }: { project: Project }) {
+// `tasks`, `spine`, and `dimmed` are supplied by ProjectWall so the card can
+// show a colour-coded left edge (by deadline/priority) and fade finished work.
+export function ProjectCard({
+  project,
+  spine,
+  dimmed,
+}: {
+  project: Project;
+  tasks?: Task[];
+  spine?: string | null;
+  dimmed?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
 
   async function handleSave(formData: FormData) {
@@ -79,40 +90,45 @@ export function ProjectCard({ project }: { project: Project }) {
 
   const days = daysUntil(project.deadline);
   return (
-    <Card className="animate-fade-up transition-transform hover:-translate-y-0.5">
-      <CardContent className="space-y-3 p-5">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-[15px] font-semibold leading-tight">{project.name}</h3>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge className={projectStatusBadge[project.status]}>{projectStatusLabel[project.status]}</Badge>
-            <button type="button" onClick={() => setEditing(true)} aria-label="Edit project" className="text-muted-foreground/60 transition hover:text-foreground">
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+    <div
+      className="h-full overflow-hidden rounded-2xl"
+      style={spine ? { borderLeft: `4px solid ${spine}` } : undefined}
+    >
+      <Card className={cn("h-full animate-fade-up transition-transform hover:-translate-y-0.5", dimmed && "opacity-60")}>
+        <CardContent className="space-y-3 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-[15px] font-semibold leading-tight">{project.name}</h3>
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge className={projectStatusBadge[project.status]}>{projectStatusLabel[project.status]}</Badge>
+              <button type="button" onClick={() => setEditing(true)} aria-label="Edit project" className="text-muted-foreground/60 transition hover:text-foreground">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {project.category ? <span className="rounded-md bg-muted px-2 py-0.5 font-medium text-foreground/80">{project.category}</span> : null}
-          {project.client ? <span>· {project.client}</span> : null}
-          <Badge className={priorityBadge[project.priority]}>{priorityLabel[project.priority]}</Badge>
-        </div>
-        <div>
-          <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {project.tasksDone}/{project.tasksTotal} tasks
-            </span>
-            <span>{project.progress}%</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {project.category ? <span className="rounded-md bg-muted px-2 py-0.5 font-medium text-foreground/80">{project.category}</span> : null}
+            {project.client ? <span>· {project.client}</span> : null}
+            <Badge className={priorityBadge[project.priority]}>{priorityLabel[project.priority]}</Badge>
           </div>
-          <Progress value={project.progress} />
-        </div>
-        {project.note ? <p className="text-xs leading-snug text-muted-foreground">{project.note}</p> : null}
-        {project.deadline ? (
-          <div className="flex items-center gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            {formatDate(project.deadline)}
-            {days !== null ? <span className={days < 0 ? "text-red-400" : ""}>· {days}d</span> : null}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {project.tasksDone}/{project.tasksTotal} tasks
+              </span>
+              <span>{project.progress}%</span>
+            </div>
+            <Progress value={project.progress} />
           </div>
-        ) : null}
-      </CardContent>
-    </Card>
+          {project.note ? <p className="text-xs leading-snug text-muted-foreground">{project.note}</p> : null}
+          {project.deadline ? (
+            <div className="flex items-center gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5" />
+              {formatDate(project.deadline)}
+              {days !== null ? <span className={days < 0 ? "text-red-400" : ""}>· {days}d</span> : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
