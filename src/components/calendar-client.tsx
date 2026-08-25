@@ -320,7 +320,11 @@ function Chip({ item, onOpen, onHover, onHoverOut, onDragStartEvent }: { item: D
       onDragStart={item.event ? () => onDragStartEvent?.(item.event!.id) : undefined}
       onMouseEnter={(e) => onHover(item, e.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHoverOut}
-      onDoubleClick={() => onOpen(item)}
+      onDoubleClick={(e) => {
+        // Double-clicking an item opens its details — don't also fire the day cell's "add event".
+        e.stopPropagation();
+        onOpen(item);
+      }}
       className={cn("w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight transition hover:brightness-125", item.event && "cursor-grab active:cursor-grabbing", item.color)}
     >
       <span className="flex items-center gap-1 truncate">
@@ -369,7 +373,7 @@ function MonthView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut
           const shown = items.slice(0, 3);
           const extra = items.length - shown.length;
           return (
-            <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("min-h-24 border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/20")}>
+            <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} onDoubleClick={() => onAdd(iso)} title="Double-click to add an event" className={cn("min-h-24 cursor-pointer border-b border-r border-border p-1 last:border-r-0", !inMonth && "bg-muted/20")}>
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => onAdd(iso)}
@@ -406,7 +410,7 @@ function WeekView({ cursor, todayIso, itemsForDate, onOpen, onHover, onHoverOut,
         const isToday = iso === todayIso;
         const items = itemsForDate(iso);
         return (
-          <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} className={cn("rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
+          <div key={iso} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropDate(iso)} onDoubleClick={() => onAdd(iso)} title="Double-click to add an event" className={cn("cursor-pointer rounded-xl border border-border p-2", isToday && "border-primary/50 bg-primary/5")}>
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs">
                 <span className="text-muted-foreground">{WEEKDAYS[weekdayOf(iso)]}</span> <span className={cn("font-semibold", isToday && "text-primary")}>{parseIso(iso).d}</span>
