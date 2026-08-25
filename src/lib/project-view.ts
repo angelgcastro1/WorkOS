@@ -32,9 +32,9 @@ export function spineColour(project: Project, mode: ProjectColourMode): string |
   return deadlineColour(project);
 }
 
-/** Finished or cancelled — off your plate either way. */
+/** Finished — off your plate. */
 export function isClosed(project: Project): boolean {
-  return project.status === "done" || project.status === "cancelled";
+  return project.status === "done";
 }
 
 const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
