@@ -21,7 +21,7 @@ function monthKey(): string {
 }
 
 export default async function InvoicesPage() {
-  const { invoices: allDocs, clients } = await getWorkspace();
+  const { invoices: allDocs, clients } = await getWorkspace(["invoices","clients"]);
   const invoices = allDocs.filter((i) => i.kind !== "quote");
   const ym = monthKey();
   const paidThisMonth = invoices.filter((i) => i.status === "paid" && (i.paidOn ?? "").slice(0, 7) === ym).reduce((s, i) => s + i.amount, 0);

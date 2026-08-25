@@ -2,7 +2,7 @@ import { getWorkspace } from "@/lib/queries";
 import { RemindersClient } from "@/components/reminders-client";
 
 export default async function RemindersPage() {
-  const { reminders } = await getWorkspace();
+  const { reminders } = await getWorkspace(["reminders"]);
 
   return (
     <div className="space-y-6">

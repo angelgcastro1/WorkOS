@@ -21,7 +21,7 @@ function stageMeta(stage: string) {
 }
 
 export default async function JobsPage() {
-  const { applications } = await getWorkspace();
+  const { applications } = await getWorkspace(["applications"]);
   const counts = STAGES.map((s) => ({ ...s, n: applications.filter((a) => a.stage === s.key).length }));
 
   return (

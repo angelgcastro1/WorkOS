@@ -22,7 +22,7 @@ import { cn, formatMoney, formatDate, daysUntil } from "@/lib/utils";
 type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foot?: string };
 
 export default async function DashboardPage() {
-  const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [workspace, profile] = await Promise.all([getWorkspace(["projects","tasks","notes","contacts","reminders","events","invoices","applications"]), getProfile()]);
   const { projects, tasks, notes, contacts, reminders, events } = workspace;
   const isEmpty = projects.length === 0 && tasks.length === 0 && notes.length === 0 && contacts.length === 0;
 

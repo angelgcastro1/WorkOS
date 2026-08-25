@@ -4,7 +4,7 @@ import { getWorkspace, getProfile } from "@/lib/queries";
 import { InvoiceEditor } from "@/components/invoice-editor";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
-  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(["clients","invoices"]), getProfile()]);
   const { client } = await searchParams;
   const invoiceCount = invoices.filter((i) => i.kind !== "quote").length;
   const defaultNumber = `INV-${String(invoiceCount + 1).padStart(4, "0")}`;

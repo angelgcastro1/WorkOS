@@ -6,7 +6,7 @@ import { InvoiceEditor } from "@/components/invoice-editor";
 
 export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(["clients","invoices"]), getProfile()]);
   const invoice = invoices.find((i) => i.id === id);
   if (!invoice) redirect("/invoices");
   const todayIso = new Date().toISOString().slice(0, 10);

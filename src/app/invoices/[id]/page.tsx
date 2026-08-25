@@ -9,7 +9,7 @@ import { InvoiceShareButtons } from "@/components/invoice-share-buttons";
 
 export default async function InvoiceViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [workspace, profile] = await Promise.all([getWorkspace(["invoices","clients"]), getProfile()]);
   const invoice = workspace.invoices.find((i) => i.id === id);
   if (!invoice) redirect("/invoices");
 

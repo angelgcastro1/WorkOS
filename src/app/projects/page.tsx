@@ -9,7 +9,7 @@ const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ProjectsPage() {
-  const { projects, clients } = await getWorkspace();
+  const { projects, clients } = await getWorkspace(["projects","clients"]);
   const active = projects.filter((p) => p.status === "active").length;
 
   return (

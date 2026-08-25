@@ -4,7 +4,7 @@ import { getWorkspace, getProfile } from "@/lib/queries";
 import { InvoiceEditor } from "@/components/invoice-editor";
 
 export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
-  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(), getProfile()]);
+  const [{ clients, invoices }, profile] = await Promise.all([getWorkspace(["clients","invoices"]), getProfile()]);
   const { client } = await searchParams;
   const quoteCount = invoices.filter((i) => i.kind === "quote").length;
   const defaultNumber = `Q-${String(quoteCount + 1).padStart(4, "0")}`;

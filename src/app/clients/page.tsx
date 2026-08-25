@@ -11,7 +11,7 @@ const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ClientsPage() {
-  const [workspace, intake] = await Promise.all([getWorkspace(), getIntakeSubmissions()]);
+  const [workspace, intake] = await Promise.all([getWorkspace(["clients"]), getIntakeSubmissions()]);
   const clients = workspace.clients;
   const intakeClientIds = intake.map((s) => s.clientId).filter((cid): cid is string => Boolean(cid));
   const newSince = new Date();

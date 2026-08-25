@@ -45,7 +45,7 @@ const PROJECT_BADGE: Record<string, string> = {
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [workspace, profile, clientNotes, allIntake] = await Promise.all([
-    getWorkspace(),
+    getWorkspace(["clients","invoices","reminders","projects"]),
     getProfile(),
     getClientNotes(id),
     getIntakeSubmissions(),

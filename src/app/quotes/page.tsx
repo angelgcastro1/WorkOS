@@ -13,7 +13,7 @@ const QUOTE_BADGE: Record<string, string> = {
 };
 
 export default async function QuotesPage() {
-  const { invoices, clients } = await getWorkspace();
+  const { invoices, clients } = await getWorkspace(["invoices","clients"]);
   const quotes = invoices.filter((i) => i.kind === "quote");
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
 

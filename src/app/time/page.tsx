@@ -13,7 +13,7 @@ function fmtMinutes(m: number): string {
 }
 
 export default async function TimePage() {
-  const { timeEntries, projects } = await getWorkspace();
+  const { timeEntries, projects } = await getWorkspace(["timeEntries","projects"]);
   const byProject = timeByProject(timeEntries, projects).sort((a, b) => b.minutes - a.minutes);
   const totalMinutes = timeEntries.reduce((s, t) => s + t.minutes, 0);
   const projectName = new Map(projects.map((p) => [p.id, p.name]));

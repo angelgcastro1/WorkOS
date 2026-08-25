@@ -239,20 +239,43 @@ export async function getIntakeSubmissions(): Promise<IntakeSubmission[]> {
   }));
 }
 
-export async function getWorkspace(): Promise<Workspace> {
+// Which slices of the workspace a page needs. Passing a subset makes each page load
+// only the tables it actually uses, instead of all of them on every navigation.
+export type WorkspaceSlice =
+  | "projects"
+  | "tasks"
+  | "notes"
+  | "contacts"
+  | "reminders"
+  | "applications"
+  | "invoices"
+  | "timeEntries"
+  | "clients"
+  | "events";
+
+export async function getWorkspace(only?: WorkspaceSlice[]): Promise<Workspace> {
   const supabase = await createClient();
+  const want = (k: WorkspaceSlice) => !only || only.includes(k);
+  // Projects and tasks are computed together: projects need their task counts, and
+  // tasks show their project's name.
+  const needProjects = want("projects") || want("tasks");
+  const needTasks = needProjects;
+  // Notes carry their attachments (files, voice notes).
+  const needNotes = want("notes");
+  const none = Promise.resolve({ data: [] as never[] });
+
   const [pRes, tRes, nRes, cRes, rRes, aRes, appRes, invRes, teRes, clRes, evRes] = await Promise.all([
-    supabase.from("projects").select("*").order("created_at", { ascending: true }),
-    supabase.from("tasks").select("*").order("created_at", { ascending: true }),
-    supabase.from("notes").select("*").order("date", { ascending: false }),
-    supabase.from("contacts").select("*").order("created_at", { ascending: true }),
-    supabase.from("reminders").select("*").order("due_at", { ascending: true }),
-    supabase.from("note_attachments").select("*").order("created_at", { ascending: true }),
-    supabase.from("applications").select("*").order("applied_on", { ascending: false }),
-    supabase.from("invoices").select("*").order("issued_on", { ascending: false }),
-    supabase.from("time_entries").select("*").order("entry_date", { ascending: false }),
-    supabase.from("clients").select("*").order("name", { ascending: true }),
-    supabase.from("events").select("*").order("event_date", { ascending: true }),
+    needProjects ? supabase.from("projects").select("*").order("created_at", { ascending: true }) : none,
+    needTasks ? supabase.from("tasks").select("*").order("created_at", { ascending: true }) : none,
+    needNotes ? supabase.from("notes").select("*").order("date", { ascending: false }) : none,
+    want("contacts") ? supabase.from("contacts").select("*").order("created_at", { ascending: true }) : none,
+    want("reminders") ? supabase.from("reminders").select("*").order("due_at", { ascending: true }) : none,
+    needNotes ? supabase.from("note_attachments").select("*").order("created_at", { ascending: true }) : none,
+    want("applications") ? supabase.from("applications").select("*").order("applied_on", { ascending: false }) : none,
+    want("invoices") ? supabase.from("invoices").select("*").order("issued_on", { ascending: false }) : none,
+    want("timeEntries") ? supabase.from("time_entries").select("*").order("entry_date", { ascending: false }) : none,
+    want("clients") ? supabase.from("clients").select("*").order("name", { ascending: true }) : none,
+    want("events") ? supabase.from("events").select("*").order("event_date", { ascending: true }) : none,
   ]);
 
   const projectRows = (pRes.data ?? []) as ProjectRow[];

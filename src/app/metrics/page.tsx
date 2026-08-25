@@ -25,7 +25,7 @@ function ChartCard({ title, hint, children }: { title: string; hint?: string; ch
 }
 
 export default async function MetricsPage() {
-  const workspace = await getWorkspace();
+  const workspace = await getWorkspace(["tasks","projects","applications","invoices"]);
   const { tasks, projects, applications, invoices } = workspace;
   const kpi = deriveKpis(workspace);
   const statusData = tasksByStatus(tasks);

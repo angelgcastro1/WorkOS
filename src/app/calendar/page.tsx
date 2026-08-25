@@ -3,7 +3,7 @@ import { CalendarClient } from "@/components/calendar-client";
 import { IcsImportButton } from "@/components/ics-import-button";
 
 export default async function CalendarPage() {
-  const { events, clients, projects, invoices, reminders, tasks } = await getWorkspace();
+  const { events, clients, projects, invoices, reminders, tasks } = await getWorkspace(["events","clients","projects","invoices","reminders","tasks"]);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
