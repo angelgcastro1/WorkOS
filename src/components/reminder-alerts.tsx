@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/brand-mark";
 
 type DueItem = { id: string; title: string };
 
@@ -30,8 +31,6 @@ function latestDueMs(reminderIso: string, rule: string, nowMs: number): number |
 
 export function ReminderAlerts() {
   const [toasts, setToasts] = useState<DueItem[]>([]);
-  // The mascot stays hidden until its animation has loaded, so it starts walking in sync.
-  const [chamReady, setChamReady] = useState(false);
   // id -> last time (ms) we surfaced it; used to re-nag every RENAG_MS.
   const lastShown = useRef<Map<string, number>>(new Map());
 
@@ -122,22 +121,8 @@ export function ReminderAlerts() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
-      {/* reminder-cham-row rides the same nudge as the toast, so the chameleon stays planted on its edge. */}
-      <div className="reminder-cham-row pointer-events-none relative z-10 -mb-3 flex">
-        {/* The blacked-out twin behind him — same clip, so it never falls out of step. */}
-        <span aria-hidden className={`reminder-cham-shadow${chamReady ? " is-walking" : ""}`} />
-        {/* Angel's chameleon animation — full choreography, transparent animated WebP.
-            The walk across the box is baked into the clip, so there is no second
-            animation that can drift out of step with it. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/cham-walk.webp"
-          alt=""
-          width={320}
-          height={101}
-          onLoad={() => setChamReady(true)}
-          className={`reminder-cham drop-shadow-lg${chamReady ? " is-walking" : ""}`}
-        />
+      <div className="pointer-events-none z-10 -mb-2.5 ml-4 flex">
+        <BrandMark height={40} alt="WorkCham" className="reminder-cham drop-shadow-lg" />
       </div>
       {toasts.map((r) => (
         <div key={r.id} className="reminder-toast flex items-start gap-3 rounded-xl border border-primary/40 bg-card p-3 shadow-lg shadow-indigo-500/20">

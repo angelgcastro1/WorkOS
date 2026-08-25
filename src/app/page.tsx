@@ -12,7 +12,6 @@ import {
   priorityLabel,
   projectStatusBadge,
   projectStatusLabel,
-  LIVE_PROJECT_STATUSES,
 } from "@/components/ui";
 import { WeeklyTrend, StatusDonut } from "@/components/charts";
 import { getWorkspace, getProfile } from "@/lib/queries";
@@ -20,8 +19,7 @@ import { deriveKpis, weeklyCompleted, tasksByStatus } from "@/lib/metrics";
 import { toggleTask, seedSampleData } from "@/app/actions";
 import { cn, formatMoney, formatDate, daysUntil } from "@/lib/utils";
 
-// `href` sends each dashboard card to the section it summarises.
-type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foot?: string; href: string };
+type Kpi = { label: string; value: string; icon: LucideIcon; accent: string; foot?: string };
 
 export default async function DashboardPage() {
   const [workspace, profile] = await Promise.all([getWorkspace(), getProfile()]);
@@ -53,20 +51,20 @@ export default async function DashboardPage() {
 
   const kpi = deriveKpis(workspace);
   const kpis: Kpi[] = [
-    { label: "Open tasks", value: String(kpi.openTasks), icon: ListTodo, accent: "text-indigo-400 bg-indigo-500/10", foot: `${kpi.overdue} overdue`, href: "/tasks" },
-    { label: "Done · 7 days", value: String(kpi.doneThisWeek), icon: Check, accent: "text-emerald-400 bg-emerald-500/10", foot: "this week", href: "/tasks" },
-    { label: "Active projects", value: String(kpi.activeProjects), icon: Folder, accent: "text-violet-400 bg-violet-500/10", foot: `${projects.length} total`, href: "/projects" },
-    { label: "Overdue", value: String(kpi.overdue), icon: Flag, accent: "text-red-400 bg-red-500/10", foot: kpi.overdue ? "needs attention" : "all clear", href: "/tasks" },
-    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), icon: DollarSign, accent: "text-emerald-400 bg-emerald-500/10", foot: `${formatMoney(kpi.outstanding)} outstanding`, href: "/invoices" },
-    { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews`, href: "/jobs" },
+    { label: "Open tasks", value: String(kpi.openTasks), icon: ListTodo, accent: "text-indigo-400 bg-indigo-500/10", foot: `${kpi.overdue} overdue` },
+    { label: "Done · 7 days", value: String(kpi.doneThisWeek), icon: Check, accent: "text-emerald-400 bg-emerald-500/10", foot: "this week" },
+    { label: "Active projects", value: String(kpi.activeProjects), icon: Folder, accent: "text-violet-400 bg-violet-500/10", foot: `${projects.length} total` },
+    { label: "Overdue", value: String(kpi.overdue), icon: Flag, accent: "text-red-400 bg-red-500/10", foot: kpi.overdue ? "needs attention" : "all clear" },
+    { label: "Income · month", value: formatMoney(kpi.incomeThisMonth), icon: DollarSign, accent: "text-emerald-400 bg-emerald-500/10", foot: `${formatMoney(kpi.outstanding)} outstanding` },
+    { label: "Applications", value: String(kpi.applicationsCount), icon: Send, accent: "text-sky-400 bg-sky-500/10", foot: `${kpi.interviews} interviews` },
   ];
 
-  const activeProjects = projects.filter((p) => LIVE_PROJECT_STATUSES.includes(p.status));
+  const activeProjects = projects.filter((p) => p.status === "active" || p.status === "planning");
   const todays = tasks
     .filter((t) => t.status !== "done" && t.due && (daysUntil(t.due) ?? 99) <= 0)
     .sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
   const upcoming = [...projects]
-    .filter((p) => p.status !== "done" && p.status !== "cancelled" && p.deadline)
+    .filter((p) => p.status !== "done" && p.deadline)
     .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))
     .slice(0, 4);
   const recentNotes = notes.slice(0, 4);
@@ -108,25 +106,18 @@ export default async function DashboardPage() {
         {kpis.map((k) => {
           const Icon = k.icon;
           return (
-            <Link
-              key={k.label}
-              href={k.href}
-              aria-label={`${k.label} — open ${k.href === "/" ? "dashboard" : k.href.slice(1)}`}
-              className="group rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <Card className="animate-fade-up h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/50 group-hover:shadow-md group-hover:shadow-indigo-500/10">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">{k.label}</span>
-                    <span className={cn("grid h-8 w-8 place-items-center rounded-lg transition group-hover:scale-110", k.accent)}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                  </div>
-                  <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{k.value}</p>
-                  {k.foot ? <p className="mt-0.5 text-xs text-muted-foreground">{k.foot}</p> : null}
-                </CardContent>
-              </Card>
-            </Link>
+            <Card key={k.label} className="animate-fade-up">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">{k.label}</span>
+                  <span className={cn("grid h-8 w-8 place-items-center rounded-lg", k.accent)}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{k.value}</p>
+                {k.foot ? <p className="mt-0.5 text-xs text-muted-foreground">{k.foot}</p> : null}
+              </CardContent>
+            </Card>
           );
         })}
       </section>
@@ -154,12 +145,8 @@ export default async function DashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="animate-fade-up">
           <CardHeader>
-            <CardTitle>
-              <Link href="/projects" className="transition hover:text-primary">Active projects</Link>
-            </CardTitle>
-            <Link href="/projects" className="text-xs text-primary transition hover:underline">
-              {activeProjects.length} in motion
-            </Link>
+            <CardTitle>Active projects</CardTitle>
+            <span className="text-xs text-muted-foreground">{activeProjects.length} in motion</span>
           </CardHeader>
           <CardContent className="space-y-4">
             {activeProjects.length === 0 ? (
@@ -168,7 +155,7 @@ export default async function DashboardPage() {
               activeProjects.map((p) => {
                 const days = daysUntil(p.deadline);
                 return (
-                  <Link key={p.id} href="/projects" className="-mx-2 block space-y-2 rounded-lg px-2 py-1.5 transition hover:bg-muted">
+                  <div key={p.id} className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="truncate text-sm font-medium">{p.name}</span>
@@ -180,7 +167,7 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                     <Progress value={p.progress} />
-                  </Link>
+                  </div>
                 );
               })
             )}
@@ -189,10 +176,8 @@ export default async function DashboardPage() {
 
         <Card className="animate-fade-up">
           <CardHeader>
-            <CardTitle>
-              <Link href="/tasks" className="transition hover:text-primary">Today &amp; overdue</Link>
-            </CardTitle>
-            <Link href="/tasks" className="text-xs text-primary transition hover:underline">{todays.length} items</Link>
+            <CardTitle>Today &amp; overdue</CardTitle>
+            <span className="text-xs text-muted-foreground">{todays.length} items</span>
           </CardHeader>
           <CardContent className="space-y-2">
             {todays.length === 0 ? (
@@ -202,7 +187,7 @@ export default async function DashboardPage() {
                 const days = daysUntil(t.due);
                 const overdue = days !== null && days < 0;
                 return (
-                  <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 transition hover:border-primary/40 hover:bg-muted">
+                  <div key={t.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
                     <form action={toggleTask}>
                       <input type="hidden" name="id" value={t.id} />
                       <input type="hidden" name="done" value="false" />
@@ -214,10 +199,10 @@ export default async function DashboardPage() {
                         <Check className="h-3 w-3" />
                       </button>
                     </form>
-                    <Link href="/tasks" className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{t.title}</p>
                       {t.project ? <p className="truncate text-xs text-muted-foreground">{t.project}</p> : null}
-                    </Link>
+                    </div>
                     <Badge className={priorityBadge[t.priority]}>{priorityLabel[t.priority]}</Badge>
                     <span className={cn("shrink-0 text-xs", overdue ? "font-semibold text-red-400" : "text-muted-foreground")}>
                       {overdue ? `${Math.abs(days as number)}d late` : "Today"}
@@ -233,8 +218,7 @@ export default async function DashboardPage() {
       <Card className="animate-fade-up">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <Link href="/calendar" className="transition hover:text-primary">This week</Link>
+            <Calendar className="h-4 w-4 text-muted-foreground" /> This week
           </CardTitle>
           <Link href="/calendar" className="text-xs text-primary transition hover:underline">
             {todaysMeetings > 0 ? `${todaysMeetings} today · ` : ""}Open calendar
@@ -252,11 +236,7 @@ export default async function DashboardPage() {
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
               {weekItems.map(({ iso, ev }) => (
-                <Link
-                  key={`${ev.id}-${iso}`}
-                  href="/calendar"
-                  className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 transition hover:border-primary/40 hover:bg-muted"
-                >
+                <div key={`${ev.id}-${iso}`} className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
                   <div className="w-12 shrink-0 text-center">
                     <p className="text-[10px] uppercase text-muted-foreground">{new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" })}</p>
                     <p className="text-base font-bold tabular-nums leading-none">{Number(iso.slice(8, 10))}</p>
@@ -265,7 +245,7 @@ export default async function DashboardPage() {
                     <p className="truncate text-sm font-medium">{ev.title}</p>
                     <p className="truncate text-xs text-muted-foreground">{ev.startTime ? `${ev.startTime.slice(0, 5)} · ` : ""}{ev.type.replace("_", " ")}</p>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}
@@ -276,12 +256,9 @@ export default async function DashboardPage() {
         <Card className="animate-fade-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-muted-foreground" />
-              <Link href="/reminders" className="transition hover:text-primary">Reminders</Link>
+              <Bell className="h-4 w-4 text-muted-foreground" /> Reminders
             </CardTitle>
-            <Link href="/reminders" className="text-xs text-primary transition hover:underline">
-              {overdueReminders > 0 ? `${overdueReminders} overdue` : "on track"}
-            </Link>
+            <span className="text-xs text-muted-foreground">{overdueReminders > 0 ? `${overdueReminders} overdue` : "on track"}</span>
           </CardHeader>
           <CardContent className="space-y-2">
             {upcomingReminders.length === 0 ? (
@@ -292,10 +269,10 @@ export default async function DashboardPage() {
                 const isOver = new Date(r.dueAt).getTime() < nowMs;
                 const label = diff < 0 ? "overdue" : diff === 0 ? "today" : `in ${diff}d`;
                 return (
-                  <Link key={r.id} href="/reminders" className="-mx-1 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition hover:bg-muted">
+                  <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
                     <span className="truncate text-sm">{r.title}</span>
                     <span className={cn("shrink-0 text-xs", isOver ? "font-semibold text-red-400" : "text-muted-foreground")}>{label}</span>
-                  </Link>
+                  </div>
                 );
               })
             )}
@@ -305,10 +282,8 @@ export default async function DashboardPage() {
         <Card className="animate-fade-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Link href="/projects" className="transition hover:text-primary">Upcoming deadlines</Link>
+              <Calendar className="h-4 w-4 text-muted-foreground" /> Upcoming deadlines
             </CardTitle>
-            <Link href="/projects" className="text-xs text-primary transition hover:underline">Open</Link>
           </CardHeader>
           <CardContent className="space-y-2">
             {upcoming.length === 0 ? (
@@ -317,13 +292,13 @@ export default async function DashboardPage() {
               upcoming.map((p) => {
                 const days = daysUntil(p.deadline);
                 return (
-                  <Link key={p.id} href="/projects" className="-mx-1 flex items-center justify-between rounded-lg px-2 py-1.5 transition hover:bg-muted">
+                  <div key={p.id} className="flex items-center justify-between rounded-lg px-1 py-1.5">
                     <span className="truncate text-sm">{p.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {formatDate(p.deadline)}
                       {days !== null ? ` · ${days}d` : ""}
                     </span>
-                  </Link>
+                  </div>
                 );
               })
             )}
@@ -333,23 +308,21 @@ export default async function DashboardPage() {
         <Card className="animate-fade-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <Link href="/notes" className="transition hover:text-primary">Recent notes</Link>
+              <FileText className="h-4 w-4 text-muted-foreground" /> Recent notes
             </CardTitle>
-            <Link href="/notes" className="text-xs text-primary transition hover:underline">Open</Link>
           </CardHeader>
           <CardContent className="space-y-2">
             {recentNotes.length === 0 ? (
               <p className="py-3 text-center text-sm text-muted-foreground">No notes yet.</p>
             ) : (
               recentNotes.map((n) => (
-                <Link key={n.id} href="/notes" className="-mx-1 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition hover:bg-muted">
+                <div key={n.id} className="flex items-center justify-between gap-3 rounded-lg px-1 py-1.5">
                   <div className="flex min-w-0 items-center gap-2">
                     <Badge className="bg-violet-500/15 text-violet-400">{n.type}</Badge>
                     <span className="truncate text-sm">{n.title}</span>
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">{formatDate(n.date)}</span>
-                </Link>
+                </div>
               ))
             )}
           </CardContent>

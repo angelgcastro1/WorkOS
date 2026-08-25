@@ -1,20 +1,15 @@
-import { Database, Sparkles, LogOut, Plug } from "lucide-react";
+import { Database, Sparkles, LogOut } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getProfile } from "@/lib/queries";
 import { createClient } from "@/lib/supabase/server";
 import { seedSampleData, signOut, updateBusinessInfo } from "@/app/actions";
-import { IntegrationsPanel } from "@/components/integrations-panel";
-import { googleConfigured, googleStatus } from "@/lib/google-calendar";
-import { zoomConfigured } from "@/lib/zoom";
 
 const fieldClass =
   "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string }> }) {
-  const sp = await searchParams;
+export default async function SettingsPage() {
   const profile = await getProfile();
-  const google = await googleStatus();
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,24 +36,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="text-xs text-muted-foreground">{profile?.role ?? "Member"}</p>
             <p className="text-xs text-muted-foreground">{user?.email ?? ""}</p>
           </div>
-        </CardContent>
-      </Card>
-
-      {sp.message ? <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">{sp.message}</p> : null}
-      {sp.error ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{sp.error}</p> : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plug className="h-4 w-4 text-muted-foreground" /> Connected apps
-          </CardTitle>
-          <span className="text-xs text-muted-foreground">Calendar sync and meeting links</span>
-        </CardHeader>
-        <CardContent>
-          <IntegrationsPanel
-            google={{ ...google, configured: googleConfigured() }}
-            zoom={{ configured: zoomConfigured() }}
-          />
         </CardContent>
       </Card>
 

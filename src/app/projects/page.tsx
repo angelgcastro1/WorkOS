@@ -1,23 +1,23 @@
 import { Plus } from "lucide-react";
 import { getWorkspace } from "@/lib/queries";
 import { createProject } from "@/app/actions";
-import { Card, LIVE_PROJECT_STATUSES } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { ProjectWall } from "@/components/project-wall";
+import { ProjectCard } from "@/components/project-card";
 
 const fieldClass =
   "rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30";
 
 export default async function ProjectsPage() {
-  const { projects, clients, tasks } = await getWorkspace();
-  const active = projects.filter((p) => LIVE_PROJECT_STATUSES.includes(p.status)).length;
+  const { projects, clients } = await getWorkspace();
+  const active = projects.filter((p) => p.status === "active").length;
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
         <p className="text-sm text-muted-foreground">
-          {projects.length} projects · {active} in flight · each card holds its own task list
+          {projects.length} projects · {active} active · click the pencil on any card to edit
         </p>
       </header>
 
@@ -40,12 +40,8 @@ export default async function ProjectsPage() {
           <select name="status" defaultValue="planning" className={fieldClass} aria-label="Status">
             <option value="planning">Planning</option>
             <option value="active">Active</option>
-            <option value="in_progress">In progress</option>
-            <option value="in_review">In review</option>
-            <option value="waiting_client">Waiting on client</option>
             <option value="on_hold">On hold</option>
             <option value="done">Done</option>
-            <option value="cancelled">Cancelled</option>
           </select>
           <select name="priority" defaultValue="medium" className={fieldClass} aria-label="Priority">
             <option value="urgent">Urgent</option>
@@ -63,7 +59,15 @@ export default async function ProjectsPage() {
         </form>
       </Card>
 
-      <ProjectWall projects={projects} tasks={tasks} />
+      {projects.length === 0 ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">No projects yet — add your first above.</div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {projects.map((p) => (
+            <ProjectCard key={p.id} project={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

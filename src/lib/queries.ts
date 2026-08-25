@@ -88,9 +88,6 @@ interface AttachmentRow {
   mime: string | null;
   size: number | string | null;
   created_at: string | null;
-  duration_seconds?: number | string | null;
-  peaks?: unknown;
-  transcript?: string | null;
 }
 interface ApplicationRow {
   id: string;
@@ -315,9 +312,6 @@ export async function getWorkspace(): Promise<Workspace> {
       mime: a.mime,
       size: a.size === null ? null : Number(a.size),
       createdAt: a.created_at,
-      durationSeconds: a.duration_seconds === null || a.duration_seconds === undefined ? null : Number(a.duration_seconds),
-      peaks: Array.isArray(a.peaks) ? (a.peaks as number[]) : null,
-      transcript: a.transcript ?? null,
     };
     const list = attachmentsByNote.get(a.note_id) ?? [];
     list.push(item);

@@ -43,8 +43,7 @@ export function deriveKpis(w: Workspace): Kpis {
     openTasks: w.tasks.filter((t) => t.status !== "done").length,
     doneThisWeek: w.tasks.filter((t) => t.status === "done" && t.completedAt !== null && t.completedAt >= weekAgoIso).length,
     overdue: w.tasks.filter((t) => t.status !== "done" && t.due !== null && t.due < todayIso).length,
-    // "In flight" — anything not finished or cancelled.
-    activeProjects: w.projects.filter((p) => !["done", "cancelled"].includes(p.status)).length,
+    activeProjects: w.projects.filter((p) => p.status === "active").length,
     completionRate: total ? Math.round((done / total) * 100) : 0,
     pipelineValue: w.contacts.filter((c) => c.stage !== "won" && c.stage !== "lost").reduce((s, c) => s + c.value, 0),
     wonValue: w.contacts.filter((c) => c.stage === "won").reduce((s, c) => s + c.value, 0),

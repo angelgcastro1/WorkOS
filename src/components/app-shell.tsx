@@ -13,7 +13,6 @@ import {
   Settings,
   Search,
   Plus,
-  Menu,
   LogOut,
   Bell,
   Shapes,
@@ -28,8 +27,6 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NavLink } from "@/components/nav-link";
-import { MobileNav } from "@/components/mobile-nav";
 import type { Profile } from "@/lib/data";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ReminderAlerts } from "@/components/reminder-alerts";
@@ -65,8 +62,6 @@ type Props = {
 export function AppShell({ profile, children }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  // Phones have no room for the sidebar, so they get a drawer instead.
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the saved preference once on mount
@@ -129,22 +124,29 @@ export function AppShell({ profile, children }: Props) {
           </div>
         )}
 
-        {/* Its own scroll area with overscroll-contain, so swiping the menu on a tablet
-            scrolls the menu instead of dragging the whole page up and down. */}
-        <nav className="flex min-h-0 flex-1 touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain">
-          {nav.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)}
-              collapsed={collapsed}
-            />
-          ))}
+        <nav className="flex flex-col gap-1">
+          {nav.map((item) => {
+            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={cn(
+                  "flex items-center rounded-lg text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2",
+                  active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="h-[18px] w-[18px] shrink-0" />
+                {collapsed ? null : item.label}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="mt-3 shrink-0 space-y-2 border-t border-border pt-3">
+        <div className="mt-auto space-y-2">
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials}</div>
@@ -182,27 +184,10 @@ export function AppShell({ profile, children }: Props) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur md:px-8">
-          {/* Phone only: the logo sits dead centre, floating above the row so it can
-              never push the hamburger, search or New button out of place. */}
-          <Link
-            href="/"
-            aria-label="WorkCham home"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 touch-manipulation [-webkit-tap-highlight-color:transparent] md:hidden"
-          >
-            <BrandMark height={30} className="shadow-lg shadow-indigo-500/20" />
-          </Link>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            className="grid h-10 w-10 shrink-0 touch-manipulation place-items-center rounded-lg border border-border bg-card text-foreground transition active:bg-muted [-webkit-tap-highlight-color:transparent] md:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event("open-command-palette"))}
-            className="flex touch-manipulation items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted active:bg-muted active:text-foreground [-webkit-tap-highlight-color:transparent]"
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted"
           >
             <Search className="h-4 w-4" />
             <span className="hidden text-left md:inline md:w-48">Search…</span>
@@ -212,7 +197,7 @@ export function AppShell({ profile, children }: Props) {
             <ThemeToggle />
             <Link
               href="/tasks"
-              className="inline-flex touch-manipulation items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110 active:brightness-95 [-webkit-tap-highlight-color:transparent]"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-500/30 transition hover:brightness-110"
             >
               <Plus className="h-4 w-4" /> New
             </Link>
@@ -221,7 +206,6 @@ export function AppShell({ profile, children }: Props) {
 
         <main className="flex-1 px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>
-      <MobileNav items={nav} pathname={pathname} profile={profile} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <ReminderAlerts />
       <CommandPalette />
     </div>
