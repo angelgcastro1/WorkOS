@@ -1,0 +1,766 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { parseIcsEvents } from "@/lib/ics";
+import { deleteRemoteEvent, googleStatus, pullEvents, pushEvent } from "@/lib/google-calendar";
+import { createMeeting, zoomConfigured } from "@/lib/zoom";
+
+function str(value: FormDataEntryValue | null): string | null {
+  const s = value?.toString().trim();
+  return s ? s : null;
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseLineItems(json: string | null): { description: string; quantity: number; rate: number }[] {
+  if (!json) return [];
+  try {
+    const arr: unknown = JSON.parse(json);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((x) => {
+        const item = (x ?? {}) as { description?: unknown; quantity?: unknown; rate?: unknown };
+        return {
+          description: typeof item.description === "string" ? item.description : "",
+          quantity: Number(item.quantity) || 0,
+          rate: Number(item.rate) || 0,
+        };
+      })
+      .filter((x) => x.description.trim() !== "" || x.quantity !== 0 || x.rate !== 0);
+  } catch {
+    return [];
+  }
+}
+
+function advanceDate(iso: string, rule: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (rule === "daily") dt.setUTCDate(dt.getUTCDate() + 1);
+  else if (rule === "weekly") dt.setUTCDate(dt.getUTCDate() + 7);
+  else if (rule === "monthly") dt.setUTCMonth(dt.getUTCMonth() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+async function spawnNextRecurringTask(id: string) {
+  const supabase = await createClient();
+  const { data: t } = await supabase.from("tasks").select("title, priority, project_id, due, repeat_rule").eq("id", id).maybeSingle();
+  if (!t || !t.repeat_rule || t.repeat_rule === "none" || !t.due) return;
+  await supabase.from("tasks").insert({
+    title: t.title,
+    status: "todo",
+    priority: t.priority,
+    project_id: t.project_id,
+    due: advanceDate(t.due, t.repeat_rule),
+    repeat_rule: t.repeat_rule,
+  });
+}
+
+export async function createTask(formData: FormData) {
+  const title = str(formData.get("title"));
+  if (!title) return;
+  const supabase = await createClient();
+  await supabase.from("tasks").insert({
+    title,
+    status: str(formData.get("status")) ?? "todo",
+    priority: str(formData.get("priority")) ?? "medium",
+    project_id: str(formData.get("project_id")),
+    due: str(formData.get("due")),
+    repeat_rule: str(formData.get("repeat_rule")) || "none",
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function toggleTask(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const wasDone = str(formData.get("done")) === "true";
+  const supabase = await createClient();
+  await supabase
+    .from("tasks")
+    .update({ status: wasDone ? "todo" : "done", completed_at: wasDone ? null : today() })
+    .eq("id", id);
+  if (!wasDone) await spawnNextRecurringTask(id);
+  revalidatePath("/", "layout");
+}
+
+export async function setTaskStatus(formData: FormData) {
+  const id = str(formData.get("id"));
+  const status = str(formData.get("status"));
+  if (!id || !status) return;
+  const supabase = await createClient();
+  await supabase
+    .from("tasks")
+    .update({ status, completed_at: status === "done" ? today() : null })
+    .eq("id", id);
+  if (status === "done") await spawnNextRecurringTask(id);
+  revalidatePath("/", "layout");
+}
+
+export async function updateTask(formData: FormData) {
+  const id = str(formData.get("id"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  const supabase = await createClient();
+  const status = str(formData.get("status")) ?? "todo";
+  await supabase
+    .from("tasks")
+    .update({
+      title,
+      status,
+      priority: str(formData.get("priority")) ?? "medium",
+      project_id: str(formData.get("project_id")),
+      due: str(formData.get("due")),
+      repeat_rule: str(formData.get("repeat_rule")) || "none",
+      completed_at: status === "done" ? today() : null,
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteTask(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("tasks").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createProject(formData: FormData) {
+  const name = str(formData.get("name"));
+  if (!name) return;
+  const supabase = await createClient();
+  const clientId = str(formData.get("client_id")) || null;
+  let clientLabel = str(formData.get("client"));
+  if (!clientLabel && clientId) {
+    const { data: c } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+    clientLabel = c?.name ?? null;
+  }
+  await supabase.from("projects").insert({
+    name,
+    status: str(formData.get("status")) ?? "planning",
+    priority: str(formData.get("priority")) ?? "medium",
+    category: str(formData.get("category")),
+    client: clientLabel,
+    client_id: clientId,
+    deadline: str(formData.get("deadline")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function createNote(formData: FormData) {
+  const title = str(formData.get("title"));
+  if (!title) return;
+  const supabase = await createClient();
+  await supabase.from("notes").insert({
+    title,
+    type: str(formData.get("type")) ?? "Note",
+    body: str(formData.get("body")),
+    project_id: str(formData.get("project_id")),
+    date: today(),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function createContact(formData: FormData) {
+  const name = str(formData.get("name"));
+  if (!name) return;
+  const supabase = await createClient();
+  await supabase.from("contacts").insert({
+    name,
+    company: str(formData.get("company")),
+    type: str(formData.get("type")) ?? "Lead",
+    stage: str(formData.get("stage")) ?? "new",
+    email: str(formData.get("email")),
+    value: Number(str(formData.get("value")) ?? "0") || 0,
+    next_follow_up: str(formData.get("next_follow_up")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function updateNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  const title = str(formData.get("title"));
+  if (!id || !title) return;
+  const supabase = await createClient();
+  await supabase
+    .from("notes")
+    .update({
+      title,
+      type: str(formData.get("type")) ?? "Note",
+      body: str(formData.get("body")),
+      project_id: str(formData.get("project_id")),
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("notes").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createReminder(formData: FormData) {
+  const title = str(formData.get("title"));
+  const dueAt = str(formData.get("due_at"));
+  if (!title || !dueAt) return;
+  const supabase = await createClient();
+  await supabase.from("reminders").insert({
+    title,
+    note: str(formData.get("note")),
+    due_at: dueAt,
+    client_id: str(formData.get("client_id")) || null,
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function toggleReminder(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const done = str(formData.get("done")) === "true";
+  const supabase = await createClient();
+  await supabase.from("reminders").update({ done: !done }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteReminder(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("reminders").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function updateProject(formData: FormData) {
+  const id = str(formData.get("id"));
+  const name = str(formData.get("name"));
+  if (!id || !name) return;
+  const supabase = await createClient();
+  await supabase
+    .from("projects")
+    .update({
+      name,
+      status: str(formData.get("status")) ?? "planning",
+      priority: str(formData.get("priority")) ?? "medium",
+      category: str(formData.get("category")),
+      client: str(formData.get("client")),
+      client_id: str(formData.get("client_id")) || null,
+      deadline: str(formData.get("deadline")),
+      note: str(formData.get("note")),
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteProject(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("projects").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createApplication(formData: FormData) {
+  const company = str(formData.get("company"));
+  if (!company) return;
+  const supabase = await createClient();
+  await supabase.from("applications").insert({
+    company,
+    role: str(formData.get("role")),
+    link: str(formData.get("link")),
+    stage: str(formData.get("stage")) ?? "applied",
+    next_step: str(formData.get("next_step")),
+    notes: str(formData.get("notes")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function setApplicationStage(formData: FormData) {
+  const id = str(formData.get("id"));
+  const stage = str(formData.get("stage"));
+  if (!id || !stage) return;
+  const supabase = await createClient();
+  await supabase.from("applications").update({ stage }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteApplication(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("applications").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createInvoice(formData: FormData) {
+  const supabase = await createClient();
+  const lineItems = parseLineItems(str(formData.get("line_items")));
+  const taxRate = Number(str(formData.get("tax_rate")) ?? "0") || 0;
+  const subtotal = lineItems.reduce((s, li) => s + li.quantity * li.rate, 0);
+  const amount = Math.round(subtotal * (1 + taxRate / 100) * 100) / 100;
+  const kind = str(formData.get("kind")) || "invoice";
+  const clientId = str(formData.get("client_id")) || null;
+  const { data } = await supabase
+    .from("invoices")
+    .insert({
+      invoice_number: str(formData.get("invoice_number")),
+      client_id: clientId,
+      kind,
+      line_items: lineItems,
+      tax_rate: taxRate,
+      notes: str(formData.get("notes")),
+      status: str(formData.get("status")) ?? "draft",
+      issued_on: str(formData.get("issued_on")) ?? today(),
+      due_on: str(formData.get("due_on")),
+      amount,
+    })
+    .select("id")
+    .single();
+  if (kind === "quote" && data?.id) {
+    const followUp = new Date();
+    followUp.setDate(followUp.getDate() + 3);
+    await supabase.from("reminders").insert({
+      title: `Follow up on quote ${str(formData.get("invoice_number")) ?? ""}`.trim(),
+      due_at: followUp.toISOString(),
+      client_id: clientId,
+    });
+  }
+  revalidatePath("/", "layout");
+  if (data?.id) redirect(`/invoices/${data.id}`);
+}
+
+export async function updateInvoice(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  const lineItems = parseLineItems(str(formData.get("line_items")));
+  const taxRate = Number(str(formData.get("tax_rate")) ?? "0") || 0;
+  const subtotal = lineItems.reduce((s, li) => s + li.quantity * li.rate, 0);
+  const amount = Math.round(subtotal * (1 + taxRate / 100) * 100) / 100;
+  await supabase
+    .from("invoices")
+    .update({
+      invoice_number: str(formData.get("invoice_number")),
+      client_id: str(formData.get("client_id")),
+      kind: str(formData.get("kind")) || "invoice",
+      line_items: lineItems,
+      tax_rate: taxRate,
+      notes: str(formData.get("notes")),
+      status: str(formData.get("status")) ?? "draft",
+      due_on: str(formData.get("due_on")),
+      amount,
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+  redirect(`/invoices/${id}`);
+}
+
+export async function setInvoiceStatus(formData: FormData) {
+  const id = str(formData.get("id"));
+  const status = str(formData.get("status"));
+  if (!id || !status) return;
+  const supabase = await createClient();
+  await supabase
+    .from("invoices")
+    .update({ status, paid_on: status === "paid" ? new Date().toISOString().slice(0, 10) : null })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function convertQuoteToInvoice(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  const { data: q } = await supabase
+    .from("invoices")
+    .select("client_id, line_items, tax_rate, notes, amount")
+    .eq("id", id)
+    .maybeSingle();
+  if (!q) return;
+  const { count } = await supabase.from("invoices").select("id", { count: "exact", head: true }).eq("kind", "invoice");
+  const number = `INV-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  const { data: created } = await supabase
+    .from("invoices")
+    .insert({
+      kind: "invoice",
+      status: "sent",
+      invoice_number: number,
+      client_id: q.client_id,
+      line_items: q.line_items,
+      tax_rate: q.tax_rate,
+      notes: q.notes,
+      amount: q.amount,
+      issued_on: today(),
+    })
+    .select("id")
+    .single();
+  await supabase.from("invoices").update({ status: "accepted" }).eq("id", id);
+  revalidatePath("/", "layout");
+  if (created?.id) redirect(`/invoices/${created.id}`);
+}
+
+export async function setClientStage(formData: FormData) {
+  const id = str(formData.get("id"));
+  const stage = str(formData.get("stage"));
+  if (!id || !stage) return;
+  const supabase = await createClient();
+  await supabase.from("clients").update({ stage }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function addClientNote(formData: FormData) {
+  const clientId = str(formData.get("client_id"));
+  const body = str(formData.get("body"));
+  if (!clientId || !body) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").insert({ client_id: clientId, body });
+  revalidatePath("/", "layout");
+}
+
+export async function updateClientNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  const body = str(formData.get("body"));
+  if (!id || !body) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").update({ body }).eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteClientNote(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("client_notes").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteInvoice(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("invoices").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createTimeEntry(formData: FormData) {
+  const minutes = Number(str(formData.get("minutes")) ?? "0") || 0;
+  if (minutes <= 0) return;
+  const supabase = await createClient();
+  await supabase.from("time_entries").insert({
+    project_id: str(formData.get("project_id")),
+    description: str(formData.get("description")),
+    minutes,
+    entry_date: str(formData.get("entry_date")) ?? new Date().toISOString().slice(0, 10),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function deleteTimeEntry(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("time_entries").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function createWhiteboard() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("whiteboards").insert({ title: "Untitled board" }).select("id").single();
+  revalidatePath("/whiteboards");
+  if (data?.id) redirect(`/whiteboards/${data.id}`);
+}
+
+export async function deleteWhiteboard(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("whiteboards").delete().eq("id", id);
+  revalidatePath("/whiteboards");
+}
+
+export async function addClient(formData: FormData) {
+  const name = str(formData.get("name"));
+  if (!name) return;
+  const supabase = await createClient();
+  await supabase.from("clients").insert({
+    name,
+    company: str(formData.get("company")),
+    email: str(formData.get("email")),
+    phone: str(formData.get("phone")),
+    address: str(formData.get("address")),
+  });
+  revalidatePath("/", "layout");
+}
+
+export async function updateClient(formData: FormData) {
+  const id = str(formData.get("id"));
+  const name = str(formData.get("name"));
+  if (!id || !name) return;
+  const supabase = await createClient();
+  await supabase
+    .from("clients")
+    .update({
+      name,
+      company: str(formData.get("company")),
+      email: str(formData.get("email")),
+      phone: str(formData.get("phone")),
+      address: str(formData.get("address")),
+    })
+    .eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function deleteClient(formData: FormData) {
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("clients").delete().eq("id", id);
+  revalidatePath("/", "layout");
+}
+
+export async function updateBusinessInfo(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase
+    .from("profiles")
+    .update({
+      business_name: str(formData.get("business_name")),
+      business_contact_name: str(formData.get("business_contact_name")),
+      business_email: str(formData.get("business_email")),
+      business_address: str(formData.get("business_address")),
+      business_phone: str(formData.get("business_phone")),
+    })
+    .eq("id", user.id);
+  revalidatePath("/", "layout");
+}
+
+export async function createEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const rm = str(formData.get("reminder_minutes"));
+  const { data: created } = await supabase
+    .from("events")
+    .insert({
+      user_id: user.id,
+      title: str(formData.get("title")) || "Untitled event",
+      type: str(formData.get("type")) || "meeting",
+      event_date: str(formData.get("event_date")) || new Date().toISOString().slice(0, 10),
+      start_time: str(formData.get("start_time")) || null,
+      end_time: str(formData.get("end_time")) || null,
+      client_id: str(formData.get("client_id")) || null,
+      project_id: str(formData.get("project_id")) || null,
+      notes: str(formData.get("notes")) || null,
+      meeting_link: str(formData.get("meeting_link")) || null,
+      attendees: str(formData.get("attendees")) || null,
+      agenda: str(formData.get("agenda")) || null,
+      action_items: str(formData.get("action_items")) || null,
+      reminder_minutes: rm === "" ? null : Number(rm),
+      reminder_channel: str(formData.get("reminder_channel")) || "both",
+      repeat_rule: str(formData.get("repeat_rule")) || "none",
+      reminder_at: str(formData.get("reminder_at")) || null,
+    })
+    .select("id, title, event_date, start_time, end_time, notes, meeting_link, google_event_id")
+    .maybeSingle();
+
+  // Mirror it onto Google straight away. If Google is not connected this is a no-op,
+  // and a failure there never blocks the save.
+  if (created) {
+    const googleId = await pushEvent(created);
+    if (googleId) {
+      await supabase.from("events").update({ google_event_id: googleId, synced_at: new Date().toISOString() }).eq("id", created.id);
+    }
+  }
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function importIcsEvents(icsText: string): Promise<{ imported: number; total: number }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { imported: 0, total: 0 };
+
+  const parsed = parseIcsEvents(icsText);
+  if (parsed.length === 0) return { imported: 0, total: 0 };
+
+  const nowIso = new Date().toISOString();
+  const rows = parsed.map((e) => ({
+    user_id: user.id,
+    apple_uid: e.uid,
+    origin: "imported",
+    type: "meeting",
+    title: e.title,
+    event_date: e.date,
+    start_time: e.startTime,
+    end_time: e.endTime,
+    notes: e.notes,
+    meeting_link: e.link,
+    synced_at: nowIso,
+  }));
+
+  const { error } = await supabase.from("events").upsert(rows, { onConflict: "user_id,apple_uid" });
+  if (error) return { imported: 0, total: parsed.length };
+
+  revalidatePath("/calendar");
+  revalidatePath("/");
+  return { imported: rows.length, total: parsed.length };
+}
+
+export async function updateEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const rm = str(formData.get("reminder_minutes"));
+  await supabase
+    .from("events")
+    .update({
+      title: str(formData.get("title")) || "Untitled event",
+      type: str(formData.get("type")) || "meeting",
+      event_date: str(formData.get("event_date")) || new Date().toISOString().slice(0, 10),
+      start_time: str(formData.get("start_time")) || null,
+      end_time: str(formData.get("end_time")) || null,
+      client_id: str(formData.get("client_id")) || null,
+      project_id: str(formData.get("project_id")) || null,
+      notes: str(formData.get("notes")) || null,
+      meeting_link: str(formData.get("meeting_link")) || null,
+      attendees: str(formData.get("attendees")) || null,
+      agenda: str(formData.get("agenda")) || null,
+      action_items: str(formData.get("action_items")) || null,
+      reminder_minutes: rm === "" ? null : Number(rm),
+      reminder_channel: str(formData.get("reminder_channel")) || "both",
+      repeat_rule: str(formData.get("repeat_rule")) || "none",
+      reminder_at: str(formData.get("reminder_at")) || null,
+      reminded_at: null,
+    })
+    .eq("id", id);
+
+  const { data: saved } = await supabase
+    .from("events")
+    .select("id, title, event_date, start_time, end_time, notes, meeting_link, google_event_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (saved) {
+    const googleId = await pushEvent(saved);
+    if (googleId && googleId !== saved.google_event_id) {
+      await supabase.from("events").update({ google_event_id: googleId }).eq("id", id);
+    }
+    if (googleId) await supabase.from("events").update({ synced_at: new Date().toISOString() }).eq("id", id);
+  }
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function deleteEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+  const { data: doomed } = await supabase.from("events").select("google_event_id").eq("id", id).maybeSingle();
+  await supabase.from("events").delete().eq("id", id);
+  if (doomed?.google_event_id) await deleteRemoteEvent(doomed.google_event_id);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function moveEvent(formData: FormData) {
+  const id = str(formData.get("id"));
+  const newDate = str(formData.get("event_date"));
+  if (!id || !newDate) return;
+  const supabase = await createClient();
+  const { data: ev } = await supabase.from("events").select("event_date, reminder_at").eq("id", id).maybeSingle();
+  let reminderAt: string | null = ev?.reminder_at ?? null;
+  if (ev?.event_date && ev?.reminder_at) {
+    const oldMs = new Date(`${ev.event_date}T00:00:00Z`).getTime();
+    const newMs = new Date(`${newDate}T00:00:00Z`).getTime();
+    reminderAt = new Date(new Date(ev.reminder_at).getTime() + (newMs - oldMs)).toISOString();
+  }
+  await supabase.from("events").update({ event_date: newDate, reminder_at: reminderAt, reminded_at: null }).eq("id", id);
+  revalidatePath("/calendar");
+  revalidatePath("/");
+}
+
+export async function seedSampleData() {
+  const supabase = await createClient();
+  await supabase.rpc("seed_sample_data");
+  revalidatePath("/", "layout");
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/login");
+}
+
+// ---------------------------------------------------------------------------
+// Integrations: Google Calendar and Zoom
+// ---------------------------------------------------------------------------
+
+/** Pulls anything new from Google into WorkCham. Safe to call as often as you like. */
+export async function syncGoogleNow() {
+  const result = await pullEvents();
+  revalidatePath("/calendar");
+  revalidatePath("/");
+  revalidatePath("/settings");
+  return result;
+}
+
+export async function disconnectGoogle() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("integrations").delete().eq("user_id", user.id).eq("provider", "google");
+  // Events already pulled in stay put; they just stop being linked.
+  await supabase.from("events").update({ google_event_id: null }).eq("user_id", user.id).not("google_event_id", "is", null);
+  revalidatePath("/settings");
+  revalidatePath("/calendar");
+}
+
+/**
+ * Schedules a real Zoom meeting for the event being edited and returns the join link,
+ * so the calendar editor can drop it straight into the meeting-link box.
+ */
+export async function createZoomLink(input: { title: string; date: string; start: string | null; end: string | null }) {
+  if (!zoomConfigured()) return { error: "Zoom is not set up yet — add the three Zoom keys in Vercel first." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const status = await googleStatus();
+  try {
+    const meeting = await createMeeting({
+      topic: input.title,
+      date: input.date,
+      start: input.start,
+      end: input.end,
+      timeZone: status.timeZone ?? "America/New_York",
+    });
+    return { url: meeting.joinUrl, id: meeting.meetingId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Zoom could not create the meeting." };
+  }
+}
